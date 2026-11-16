@@ -1,0 +1,38 @@
+; JSON rules for the regex tokenizer (tokenizer=regex). Test/reference backend.
+;
+; Format:
+;   [Rules]            initial state; [Rules.<name>] additional states
+;   N=class:regex      rule tried in ascending N; first match at the position wins
+;   N.push=<state>     enter <state> after the match
+;   N.pop=true         return to the previous state after the match
+;   default=class      class for characters no rule matches (per state)
+; Regexes are ECMAScript (std::regex), matched within a single line.
+; Class names: see README.md ("Token classes").
+
+[Meta]
+name=JSON (regex)
+
+[Rules]
+10=comment:/\*
+10.push=block_comment
+20=comment://.*
+30=key:"(?:\\.|[^"\\])*"(?=\s*:)
+40=string:"
+40.push=string
+50=number:-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?(?![\w.])
+60=constant:\b(?:true|false|null)\b
+70=punctuation:[{}\[\]:,]
+80=error:[^\s{}\[\]:,"]+
+
+[Rules.string]
+default=string
+10=string_escape:\\u[0-9a-fA-F]{4}|\\.
+20=string:[^"\\]+
+30=string:"
+30.pop=true
+
+[Rules.block_comment]
+default=comment
+10=comment:\*/
+10.pop=true
+20=comment:[^*]+

@@ -1,0 +1,4 @@
+; Python overrides for the dark theme (only differences from default.theme).
+[Tokens]
+decorator=#DCDC8B
+builtin=#4FC1FF

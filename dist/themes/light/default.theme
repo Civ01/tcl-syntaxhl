@@ -1,0 +1,36 @@
+; Light theme - base palette for all languages.
+; [Tokens] format: class=foreground[,background][,flags]
+;   colors: #RRGGBB (or #RGB); empty = inherit; background "none" = view background
+;   flags : bold, italic, underline (combine with +), or normal
+; Per-language files (python.theme, css.theme, ...) only need overrides.
+
+[View]
+background=#FFFFFF
+foreground=#000000
+infobar_background=#FFF4CE
+infobar_foreground=#000000
+
+[Tokens]
+keyword=#0000FF
+builtin=#267F99
+constant=#0000FF
+identifier=#000000
+function=#795E26
+type=#267F99
+decorator=#AF00DB
+number=#098658
+string=#A31515
+string_escape=#EE0000
+comment=#008000,,italic
+operator=#000000
+punctuation=#000000
+key=#0451A5
+section=#800000,,bold
+value=#000000
+selector=#800000
+property=#E50000
+at_rule=#AF00DB
+variable=#001080
+regex=#811F3F
+template=#A31515
+error=#FF0000,,underline

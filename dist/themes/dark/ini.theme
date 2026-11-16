@@ -1,0 +1,4 @@
+; INI overrides for the dark theme.
+[Tokens]
+key=#9CDCFE
+value=#CE9178

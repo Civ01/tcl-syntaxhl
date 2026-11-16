@@ -1,0 +1,4 @@
+; INI overrides for the light theme.
+[Tokens]
+key=#0000FF
+value=#A31515

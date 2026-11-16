@@ -1,0 +1,4 @@
+; Python overrides for the light theme (only differences from default.theme).
+[Tokens]
+decorator=#808000
+builtin=#795E26

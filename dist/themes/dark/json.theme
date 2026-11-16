@@ -1,0 +1,4 @@
+; JSON overrides for the dark theme.
+[Tokens]
+string=#CE9178
+key=#9CDCFE

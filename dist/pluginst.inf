@@ -1,0 +1,5 @@
+[plugininstall]
+description=Syntax highlighting viewer (JSON, CSS, Python, JS, INI)
+type=wlx
+file=tcl-syntaxhl.wlx
+defaultdir=tcl-syntaxhl
