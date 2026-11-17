@@ -1,0 +1,16 @@
+/* Sample stylesheet */
+@import url("base.css");
+
+:root { --accent: #0a84ff; }
+
+body > main .card:hover::after,
+a[href^="https"] {
+	color: var(--accent) !important;
+	margin: 0 auto -1.5em 10%;
+	background: url(img/bg.png) no-repeat;
+	font-family: "Segoe UI", sans-serif;
+}
+
+@media screen and (max-width: 600px) {
+	.card { width: calc(100% - 2rem); }
+}

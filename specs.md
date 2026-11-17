@@ -72,10 +72,10 @@ README.md
 [plugininstall]
 description=Syntax highlighting viewer (JSON, CSS, Python, JS, INI)
 type=wlx
-file=tcl-syntaxhl.wlx64
+file=tcl-syntaxhl.wlx
 defaultdir=tcl-syntaxhl
 ```
-The exact `file=` value for an x64-only package must be verified against TC's installer behaviour.
+TC x64 installs the `.wlx64` file with the same base name as `file=`, so the entry names `.wlx` even though only the `.wlx64` ships. This still needs verification with a real TC install.
 
 ---
 
@@ -161,6 +161,7 @@ struct LexerFactory {
 
 - `[General] tokenizer = native | regex` sets the global default to `native`.
 - An optional per-language override is available, e.g. `[JSON] tokenizer = regex`.
+- **Lexer reuse:** a language section may set `lexer=<id>` to reuse a native lexer under another name (e.g. `[JSONC] lexer=json`). A language with a rules file but no native lexer is handled by the regex backend.
 - If `regex` is selected but `rules/<lang>.rules` is missing or invalid, the plugin falls back to `native` and shows an info-bar notice.
 
 ### 4.3 Config window backbone (not user-reachable in v1)
@@ -347,21 +348,24 @@ The lexers handle basic, robust highlighting. They are not validators, apart fro
 - **Location:** `rules/<lang>.rules`, INI-style, read with the same parser as the config and themes.
 - **Matching:** rules are tried in order at the current position, and the first match wins. A position matching no rule is emitted as `Default`, advancing one character.
 - **Engine:** `std::wregex` (ECMAScript). Regexes compile once per load. Performance is secondary for this testing backend.
-- **States (v1, minimal):** an optional `[state.<name>]` section with `push`/`pop` actions, enough for multi-line comments. If complexity grows, v1 may ship stateless and document the limits.
+- **States:** `[Rules]` is the initial state and `[Rules.<name>]` sections define further states. `N.push=<state>` enters a state after a rule matches, `N.pop=true` returns to the previous one, and `default=<class>` colors unmatched characters in a state. States form a stack of up to 8 levels kept in `LexState`, so rule-based lexers are line-resumable as well. A zero-length match counts only when it changes state, and at most 4 times in a row.
 
 ```ini
 [Meta]
 name=JSON (regex)
 
-[Rules]
-; N=class:regex   — tried in ascending N
-1=key:"(?:\\.|[^"\\])*"(?=\s*:)
-2=string:"(?:\\.|[^"\\])*"
-3=number:-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?
-4=constant:\b(?:true|false|null)\b
-5=punctuation:[{}\[\]:,]
+[Rules]                  ; initial state
+10=comment:/\*           ; N=class:regex, tried in ascending N
+10.push=block_comment
+30=key:"(?:\\.|[^"\\])*"(?=\s*:)
+50=number:-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?(?![\w.])
+
+[Rules.block_comment]
+default=comment
+10=comment:\*/
+10.pop=true
 ```
-The exact syntax will be finalised during implementation and documented in the README. The example shows the intended shape.
+This syntax is final for v1 and documented in the README; `dist/rules/json.rules` is the reference.
 
 - **Shipped rules:** only `rules/json.rules` in v1. Malformed rules produce an info-bar notice and a native fallback.
 
@@ -456,11 +460,29 @@ tests/
 
 ---
 
-## 16. Open questions / assumptions to confirm
+## 16. Implementation notes (v1 as built)
+
+- **Lexer base:** native lexers derive from `LineLexer`, which feeds one line at a time. Anything that crosses a line boundary lives in `LexState`, which guarantees resumability; tests check it for every lexer. Gaps (Default) are not emitted as tokens.
+- **Line endings:** text is normalised to `\r` line endings, so lexer offsets equal RichEdit character positions. NUL characters are shown as spaces.
+- **Full mode:**
+  - Text is streamed as RTF. Tokens that look like plain text produce no run, and same-style tokens separated only by blanks are merged.
+  - Wrap and size are applied before streaming, because re-laying out a big formatted document is expensive.
+- **Lazy mode:**
+  - Plain text is loaded, then visible lines are formatted through TOM (`ITextRange`), which never moves the selection or the scroll position.
+  - Painting is triggered by scroll, size and key events, plus a 100 ms timer.
+  - Tokens of extremely long lines are applied only near the visible character window and kept pending, capped at 2M.
+- **Scrolling:** RichEdit scroll positions are 16-bit and wrap on tall documents. Percent reporting, `lc_setpercent`, go-to-line centering and the restore logic therefore use character positions and line numbers (`EM_CHARFROMPOS`, `EM_LINESCROLL`), never `EM_GETSCROLLPOS`/`EM_SETSCROLLPOS`.
+- **Quick View:** detected when the parent window class is not `TLister`; the plugin does not take focus in that case.
+- **Encoding notice:** files decoded with the ANSI fallback show no notice. The spec marked it optional, and legacy INI files would trigger it constantly.
+- **Tests:** besides the unit tests, `tools/plugin_smoke` drives the real DLL in a fake `TLister` host. It verifies colors against the core lexers, search, commands, `ListLoadNext`, encodings, plain, lazy and regex modes, and language options. CI runs it on `windows-latest`.
+
+---
+
+## 17. Open questions / assumptions to confirm
 
 1. **v1 feature set:** Find, Copy/Select all and word wrap are included; printing is deferred. This was assumed because the question went unanswered.
 2. **Tab width:** fixed at 4 columns, since no INI option was requested. An option can be added if needed.
 3. **Example plugins and the TC Lister SDK docs:** referenced in the project description but not present in the project. This spec relies on the standard `listplug.h` API and will be cross-checked once the docs are available.
-4. **`pluginst.inf`:** the `file=` value for an x64-only package needs verification in TC.
-5. **Regex `.rules` syntax and state support:** to be finalised in milestone 7 (§9).
+4. **`pluginst.inf`:** the package uses `file=tcl-syntaxhl.wlx` (TC x64 picks the `.wlx64`); this needs verification with a real TC install.
+5. **Regex `.rules` syntax and state support:** settled (§9).
 6. **INI key naming:** the interview example `support-jsonc_comment` was normalised to `support_jsonc_comments`, using snake_case consistently.

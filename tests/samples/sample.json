@@ -1,0 +1,7 @@
+{
+  "name": "tcl-syntaxhl",
+  "version": 1.0,
+  "tags": ["json", "css", "python", "js", "ini"],
+  "nested": {"enabled": true, "count": -42, "ratio": 3.5e-2, "nothing": null},
+  "escapes": "tab\tquote\"unicode\u00e9"
+}

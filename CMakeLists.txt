@@ -19,7 +19,7 @@ if(MSVC)
   add_compile_options(/utf-8 /W4 /permissive- /Zc:__cplusplus /EHsc)
   add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
 else()
-  add_compile_options(-Wall -Wextra -Wno-unused-parameter)
+  add_compile_options(-Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers)
 endif()
 
 # ---------------------------------------------------------------- core (portable)
@@ -46,6 +46,7 @@ if(TCL_BUILD_PLUGIN)
   if(NOT WIN32)
     message(FATAL_ERROR "TCL_BUILD_PLUGIN requires a Windows target (MSVC or MinGW cross toolchain)")
   endif()
+  enable_language(RC)
   add_library(tcl-syntaxhl SHARED
     src/plugin/exports.cpp
     src/plugin/WinUtil.cpp
@@ -57,12 +58,15 @@ if(TCL_BUILD_PLUGIN)
     src/ui/resources.rc
     src/plugin/tcl-syntaxhl.def
   )
-  target_link_libraries(tcl-syntaxhl PRIVATE shl_core user32 gdi32 comctl32 uxtheme ole32)
+  target_link_libraries(tcl-syntaxhl PRIVATE shl_core user32 gdi32 comctl32 uxtheme)
   target_compile_definitions(tcl-syntaxhl PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0A00)
   set_target_properties(tcl-syntaxhl PROPERTIES PREFIX "" SUFFIX ".wlx64")
   if(MINGW)
-    target_link_options(tcl-syntaxhl PRIVATE -static -static-libgcc -static-libstdc++)
+    target_link_options(tcl-syntaxhl PRIVATE -static -static-libgcc -static-libstdc++ $<$<CONFIG:Release>:-s>)
   endif()
+  # Copy INI/themes/rules next to the built DLL so it can be used/tested in place.
+  add_custom_command(TARGET tcl-syntaxhl POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/dist $<TARGET_FILE_DIR:tcl-syntaxhl>)
 
   # Release layout: build/package/tcl-syntaxhl/* and build/tcl-syntaxhl-<ver>.zip
   set(_pkg_dir ${CMAKE_BINARY_DIR}/package/tcl-syntaxhl)
@@ -99,4 +103,17 @@ if(TCL_BUILD_TESTS)
     target_link_options(shl_tests PRIVATE -static -static-libgcc -static-libstdc++)
   endif()
   add_test(NAME shl_tests COMMAND shl_tests)
+endif()
+
+# ---------------------------------------------------------------- end-to-end smoke test (Windows)
+if(TCL_BUILD_PLUGIN AND TCL_BUILD_TESTS)
+  add_executable(plugin_smoke tools/plugin_smoke.cpp)
+  target_link_libraries(plugin_smoke PRIVATE shl_core user32 gdi32)
+  target_compile_definitions(plugin_smoke PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+  if(MINGW)
+    target_link_options(plugin_smoke PRIVATE -municode -static -static-libgcc -static-libstdc++)
+  endif()
+  add_dependencies(plugin_smoke tcl-syntaxhl)
+  add_test(NAME plugin_smoke
+    COMMAND plugin_smoke $<TARGET_FILE:tcl-syntaxhl> ${CMAKE_SOURCE_DIR}/tests/samples)
 endif()
