@@ -114,6 +114,27 @@ COLORREF colorAt(HWND edit, LONG cp) {
     return cf.crTextColor;
 }
 
+void diag(HWND plugin, const char* when) {
+    HWND edit = findChild(plugin, MSFTEDIT_CLASS);
+    RECT rc{}, prc{}, hrc{};
+    GetClientRect(edit, &rc);
+    GetClientRect(plugin, &prc);
+    GetClientRect(g_host, &hrc);
+    POINTL tl{0, 0}, br{rc.right - 1, rc.bottom - 1};
+    LRESULT top = SendMessageW(edit, EM_CHARFROMPOS, 0, reinterpret_cast<LPARAM>(&tl));
+    LRESULT bottom = SendMessageW(edit, EM_CHARFROMPOS, 0, reinterpret_cast<LPARAM>(&br));
+    GETTEXTLENGTHEX gl{GTL_NUMCHARS | GTL_PRECISE, 1200};
+    LRESULT len = SendMessageW(edit, EM_GETTEXTLENGTHEX, reinterpret_cast<WPARAM>(&gl), 0);
+    IUnknown* ole = nullptr;
+    LRESULT hasOle = SendMessageW(edit, EM_GETOLEINTERFACE, 0, reinterpret_cast<LPARAM>(&ole));
+    if (ole) ole->Release();
+    std::printf("    diag[%s]: edit %ldx%ld plugin %ldx%ld host %ldx%ld visible=%d len=%lld top=%lld bottom=%lld "
+                "first=%lld lines=%lld ole=%lld\n",
+                when, rc.right, rc.bottom, prc.right, prc.bottom, hrc.right, hrc.bottom, IsWindowVisible(edit) ? 1 : 0,
+                (long long)len, (long long)top, (long long)bottom, (long long)SendMessageW(edit, EM_GETFIRSTVISIBLELINE, 0, 0),
+                (long long)SendMessageW(edit, EM_GETLINECOUNT, 0, 0), (long long)hasOle);
+}
+
 COLORREF ref(Color c) { return RGB((c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF); }
 
 struct Expected {
@@ -332,8 +353,10 @@ int wmain(int argc, wchar_t** argv) {
         writeFile(g_tmp / "long.ini", big);
         h = open(g_tmp / "long.ini");
         g_lastPercent = -1;
+        diag(h, "long.ini loaded");
         api.command(h, lc_setpercent, 100);
         pump(250);
+        diag(h, "after setpercent 100");
         check(g_lastPercent == 100, "percent reported after lc_setpercent 100 (got " + std::to_string(g_lastPercent) + ")");
         int at100 = g_lastPercent;
         api.command(h, lc_setpercent, 30);
@@ -454,6 +477,7 @@ int wmain(int argc, wchar_t** argv) {
         if (h) {
             pump(300);
             HWND edit = findChild(h, MSFTEDIT_CLASS);
+            diag(h, "lazy loaded");
             HWND info = findChild(h, L"TclSyntaxHL_InfoBar");
             check(info && !IsWindowVisible(info), "no info bar in lazy mode");
             auto e = expectedFor(p, false);
