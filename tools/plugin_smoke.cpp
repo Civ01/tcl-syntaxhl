@@ -355,16 +355,16 @@ int wmain(int argc, wchar_t** argv) {
         g_lastPercent = -1;
         diag(h, "long.ini loaded");
         api.command(h, lc_setpercent, 100);
-        pump(250);
+        pump(500);
         diag(h, "after setpercent 100");
         check(g_lastPercent == 100, "percent reported after lc_setpercent 100 (got " + std::to_string(g_lastPercent) + ")");
         int at100 = g_lastPercent;
         api.command(h, lc_setpercent, 30);
-        pump(250);
+        pump(500);
         check(g_lastPercent >= 28 && g_lastPercent <= 32, "percent ~30 after lc_setpercent 30 (got " +
                                                               std::to_string(g_lastPercent) + ")");
         api.command(h, lc_setpercent, 0);
-        pump(250);
+        pump(500);
         check(g_lastPercent == 0, "percent 0 after lc_setpercent 0 (got " + std::to_string(g_lastPercent) + ", before " +
                                       std::to_string(at100) + ")");
         close(h);

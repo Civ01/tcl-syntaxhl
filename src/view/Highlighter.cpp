@@ -269,8 +269,12 @@ void applyTokens(HWND edit, const std::vector<Token>& tokens, const Theme& theme
         return;
     }
     // TOM ranges format text without touching the selection or scroll position.
+    // TOM honours ES_READONLY (E_ACCESSDENIED), so lift it for this pass only.
+    bool readOnly = (GetWindowLongPtrW(edit, GWL_STYLE) & ES_READONLY) != 0;
+    if (readOnly) SendMessageW(edit, EM_SETREADONLY, FALSE, 0);
     long freezeCount = 0;
     doc->Freeze(&freezeCount);
+    bool failed = false;
     for (const auto& t : tokens) {
         const Style& s = theme.style(t.cls);
         if (t.cls == TokenClass::Default || isPlainLook(s, theme)) continue;
@@ -279,7 +283,7 @@ void applyTokens(HWND edit, const std::vector<Token>& tokens, const Theme& theme
             continue;
         ITextFont* font = nullptr;
         if (SUCCEEDED(range->GetFont(&font)) && font) {
-            font->SetForeColor(static_cast<long>(win::toColorRef(s.fg)));
+            if (FAILED(font->SetForeColor(static_cast<long>(win::toColorRef(s.fg))))) failed = true;
             font->SetBackColor(s.bg ? static_cast<long>(win::toColorRef(*s.bg)) : static_cast<long>(tomAutoColor));
             font->SetBold((s.flags & kBold) ? tomTrue : tomFalse);
             font->SetItalic((s.flags & kItalic) ? tomTrue : tomFalse);
@@ -287,8 +291,15 @@ void applyTokens(HWND edit, const std::vector<Token>& tokens, const Theme& theme
             font->Release();
         }
         range->Release();
+        if (failed) break;
     }
     doc->Unfreeze(&freezeCount);
+    if (readOnly) SendMessageW(edit, EM_SETREADONLY, TRUE, 0);
+    if (failed) {
+        doc->Release();
+        applyTokensWithSelection(edit, tokens, theme);
+        return;
+    }
     doc->Release();
     InvalidateRect(edit, nullptr, FALSE);
 }
