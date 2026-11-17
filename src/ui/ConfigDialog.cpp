@@ -4,6 +4,7 @@
 #include <shellapi.h>
 #include <uxtheme.h>
 
+#include "DarkMode.h"
 #include "plugin/DebugLog.h"
 #include "plugin/WinUtil.h"
 #include "resource.h"
@@ -16,10 +17,14 @@ INT_PTR CALLBACK ConfigPage::pageProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp) 
         page = reinterpret_cast<ConfigPage*>(lp);
         SetWindowLongPtrW(dlg, DWLP_USER, lp);
         page->hwnd_ = dlg;
-        EnableThemeDialogTexture(dlg, ETDT_ENABLETAB);
+        if (!page->dark_) EnableThemeDialogTexture(dlg, ETDT_ENABLETAB);
         return FALSE;
     }
     if (!page) return FALSE;
+    if (page->dark_) {
+        INT_PTR r = 0;
+        if (dark::handleMessage(dlg, msg, wp, lp, r)) return r;
+    }
     try {
         return page->handle(msg, wp, lp);
     } catch (...) {
@@ -59,6 +64,7 @@ void ConfigDialog::initDialog(HWND dlg) {
     RECT display = rc;
     TabCtrl_AdjustRect(tabs_, FALSE, &display);
     for (auto& p : pages_) {
+        p->dark_ = ctx_.dark;
         CreateDialogParamW(win::g_instance, MAKEINTRESOURCEW(p->dialogId()), dlg, &ConfigPage::pageProc,
                            reinterpret_cast<LPARAM>(p.get()));
         if (!p->hwnd()) continue;
@@ -66,6 +72,9 @@ void ConfigDialog::initDialog(HWND dlg) {
                      display.bottom - display.top, SWP_NOACTIVATE);
         p->init();
         p->load(settings_.config());
+    }
+    if (ctx_.dark) {
+        dark::applyToDialog(dlg);  // pages are children: covered too
     }
     std::wstring title = L"tcl-syntaxhl settings - " + settings_.path().filename().wstring();
     SetWindowTextW(dlg, title.c_str());
@@ -99,6 +108,14 @@ bool ConfigDialog::apply() {
         return false;
     }
     dbg::log("settings saved to %s", win::narrow(settings_.path().wstring()).c_str());
+    for (int i = 0; i < static_cast<int>(pages_.size()); ++i) {
+        std::wstring err;
+        if (!pages_[i]->saveExternal(err)) {
+            selectPage(i);
+            MessageBoxW(dlg_, err.c_str(), L"tcl-syntaxhl settings", MB_ICONERROR | MB_OK);
+            return false;
+        }
+    }
     applied_ = true;
     if (onApplied) onApplied();
     // Pages show the values as saved (e.g. normalised sizes).
@@ -108,6 +125,10 @@ bool ConfigDialog::apply() {
 
 INT_PTR CALLBACK ConfigDialog::dlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp) {
     auto* self = reinterpret_cast<ConfigDialog*>(GetWindowLongPtrW(dlg, DWLP_USER));
+    if (self && self->ctx_.dark) {
+        INT_PTR r = 0;
+        if (dark::handleMessage(dlg, msg, wp, lp, r)) return r;
+    }
     try {
         switch (msg) {
             case WM_INITDIALOG:

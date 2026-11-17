@@ -16,6 +16,7 @@
 #include "plugin/WinUtil.h"
 #include "plugin/listplug.h"
 #include "ui/ConfigDialog.h"
+#include "ui/DarkMode.h"
 #include "ui/GotoLineDialog.h"
 #include "ui/resource.h"
 
@@ -142,6 +143,7 @@ bool ListerWindow::load(const std::wstring& file, int showFlags) {
     cfg_ = std::move(cfg);
     lang = cfg_.languageForFile(fs::path(file));
     lexer_ = std::move(sel.lexer);  // may be null (forced plain view)
+    languageId_ = lang ? lang->id : std::string();
     text_ = normalizeLineEndings(decoded.text);
     decoded.text.clear();
     decoded.text.shrink_to_fit();
@@ -204,6 +206,9 @@ bool ListerWindow::load(const std::wstring& file, int showFlags) {
     SendMessageW(edit_, WM_SETREDRAW, TRUE, 0);
 
     SetWindowTheme(edit_, dark_ ? L"DarkMode_Explorer" : L"Explorer", nullptr);
+    // Dark context menu (and other popups) when TC is in dark mode.
+    ui::dark::allowForWindow(hwnd_, dark_);
+    ui::dark::allowForWindow(edit_, dark_);
     InvalidateRect(edit_, nullptr, TRUE);
 
     if (mode_ == RenderMode::Lazy && lexer_) lazy_ = std::make_unique<LazyModel>(text_, *lexer_);
@@ -324,6 +329,35 @@ void ListerWindow::setPercent(int pct) {
     viewChanged();
 }
 
+// Direct (non-animated) wheel scrolling. RichEdit animates wheel scrolling
+// ("smooth scrolling"), which feels floaty compared to Lister; scroll whole
+// lines immediately instead, honouring the system wheel settings and
+// accumulating partial deltas from high-resolution wheels / touchpads.
+void ListerWindow::wheelScroll(int delta, bool horizontal) {
+    int& accum = horizontal ? wheelAccumH_ : wheelAccumV_;
+    if ((accum > 0 && delta < 0) || (accum < 0 && delta > 0)) accum = 0;  // direction changed
+    accum += delta;
+    UINT perNotch = 3;
+    SystemParametersInfoW(horizontal ? SPI_GETWHEELSCROLLCHARS : SPI_GETWHEELSCROLLLINES, 0, &perNotch, 0);
+    if (perNotch == 0) return;
+    if (!horizontal && perNotch == WHEEL_PAGESCROLL) {
+        while (accum >= WHEEL_DELTA) { SendMessageW(edit_, WM_VSCROLL, SB_PAGEUP, 0); accum -= WHEEL_DELTA; }
+        while (accum <= -WHEEL_DELTA) { SendMessageW(edit_, WM_VSCROLL, SB_PAGEDOWN, 0); accum += WHEEL_DELTA; }
+    } else {
+        int units = accum * static_cast<int>(perNotch) / WHEEL_DELTA;
+        if (units == 0) return;
+        accum -= units * WHEEL_DELTA / static_cast<int>(perNotch);
+        // Wheel forward (positive) scrolls up / left.
+        if (horizontal) {
+            SendMessageW(edit_, EM_LINESCROLL, units, 0);
+        } else {
+            LONG first = static_cast<LONG>(SendMessageW(edit_, EM_GETFIRSTVISIBLELINE, 0, 0));
+            scrollTopToDisplayLine(std::max<LONG>(0, first - units));
+        }
+    }
+    viewChanged();
+}
+
 // True if a navigation key cannot move the caret (start/end of text, line or
 // first/last line), i.e. RichEdit would reject it with a beep.
 bool ListerWindow::navigationAtLimit(UINT vk, bool ctrl) const {
@@ -381,7 +415,7 @@ void ListerWindow::scrollToCenter(LONG cp) {
 }
 
 void ListerWindow::gotoLine() {
-    auto t = ui::showGotoLineDialog(hwnd_, currentLine(), lineStarts_.size());
+    auto t = ui::showGotoLineDialog(hwnd_, currentLine(), lineStarts_.size(), dark_);
     if (!t) return;
     size_t start = lineStarts_[t->line - 1];
     size_t end = t->line < lineStarts_.size() ? lineStarts_[t->line] - 1 : text_.size();
@@ -495,7 +529,7 @@ void ListerWindow::openSettings() {
     settingsOpen_ = true;
     Settings s;
     s.load(win::iniPath(), win::ansiConverter());
-    ui::ConfigDialog dlg(s, ui::ConfigContext{win::pluginDir()});
+    ui::ConfigDialog dlg(s, ui::ConfigContext{win::pluginDir(), dark_, cfg_.themeSet(dark_), languageId_});
     HWND self = hwnd_;
     dlg.onApplied = [this, self] {
         if (!IsWindow(self)) return;
@@ -638,6 +672,12 @@ LRESULT ListerWindow::handleEditMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
             handled = true;
             return 0;
         case WM_MOUSEWHEEL:
+            if (!(GET_KEYSTATE_WPARAM(wp) & MK_CONTROL)) {  // Ctrl+wheel = RichEdit zoom
+                handled = true;
+                wheelScroll(GET_WHEEL_DELTA_WPARAM(wp), false);
+                return 0;
+            }
+            [[fallthrough]];
         case WM_VSCROLL:
         case WM_HSCROLL: {
             LRESULT res = CallWindowProcW(origEditProc_, hwnd, msg, wp, lp);
@@ -645,6 +685,10 @@ LRESULT ListerWindow::handleEditMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
             viewChanged();
             return res;
         }
+        case WM_MOUSEHWHEEL:
+            handled = true;
+            wheelScroll(GET_WHEEL_DELTA_WPARAM(wp), true);
+            return TRUE;
         case WM_CONTEXTMENU:
             handled = true;
             showContextMenu(GET_X_LPARAM(lp), GET_Y_LPARAM(lp));

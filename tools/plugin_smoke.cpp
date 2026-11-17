@@ -544,6 +544,26 @@ int wmain(int argc, wchar_t** argv) {
         fs::remove(logFile, ec);
     }
 
+    section("mouse wheel (direct, not animated)");
+    {
+        std::string big;
+        for (int i = 0; i < 500; ++i) big += "k" + std::to_string(i) + "=v\n";
+        writeFile(g_tmp / "wheel.ini", big);
+        HWND h = open(g_tmp / "wheel.ini");
+        HWND edit = findChild(h, MSFTEDIT_CLASS);
+        UINT perNotch = 3;
+        SystemParametersInfoW(SPI_GETWHEELSCROLLLINES, 0, &perNotch, 0);
+        auto first = [&] { return static_cast<long>(SendMessageW(edit, EM_GETFIRSTVISIBLELINE, 0, 0)); };
+        SendMessageW(edit, WM_MOUSEWHEEL, MAKEWPARAM(0, static_cast<WORD>(-120)), 0);
+        check(first() == static_cast<long>(perNotch), "one notch down scrolls exactly " + std::to_string(perNotch) +
+                                                          " lines at once (got " + std::to_string(first()) + ")");
+        for (int i = 0; i < 3; ++i) SendMessageW(edit, WM_MOUSEWHEEL, MAKEWPARAM(0, static_cast<WORD>(-40)), 0);
+        check(first() == 2 * static_cast<long>(perNotch), "three 1/3 notches add up to one notch");
+        SendMessageW(edit, WM_MOUSEWHEEL, MAKEWPARAM(0, 240), 0);
+        check(first() == 0, "two notches up return to the top");
+        close(h);
+    }
+
     section("ListLoadNext");
     {
         HWND h = open(g_samples / "sample.json");
@@ -810,6 +830,118 @@ int wmain(int argc, wchar_t** argv) {
             check(!italicAt(findChild(h, MSFTEDIT_CLASS), commentPos), "view reloaded with the new settings");
             close(h);
         }
+        g_dialogScript = nullptr;
+    }
+
+    section("theme editor");
+    {
+        IniOverride ov([](IniDocument&) {});
+        auto themeFile = g_pluginDir / "themes" / "light" / "python.theme";
+        std::string themeBackup;
+        readFileBytes(themeFile, themeBackup);
+        auto py = g_samples / "sample.py";
+        auto e = expectedFor(py, false);
+        LONG kwPos = -1;
+        for (const auto& t : e.tokens)
+            if (t.cls == TokenClass::Keyword) { kwPos = static_cast<LONG>(t.start); break; }
+        HWND h = open(py);
+        auto boldAt = [&](LONG cp) {
+            HWND ed = findChild(h, MSFTEDIT_CLASS);
+            CHARRANGE cr{cp, cp + 1};
+            SendMessageW(ed, EM_EXSETSEL, 0, reinterpret_cast<LPARAM>(&cr));
+            CHARFORMAT2W cf{};
+            cf.cbSize = sizeof cf;
+            SendMessageW(ed, EM_GETCHARFORMAT, SCF_SELECTION, reinterpret_cast<LPARAM>(&cf));
+            return (cf.dwEffects & CFE_BOLD) != 0;
+        };
+        check(!boldAt(kwPos), "keywords not bold before");
+        std::wstring fileLabel;
+        bool colorDialogSeen = false;
+        g_dialogSeen = false;
+        g_dialogScript = [&](HWND dlg) {
+            wchar_t buf[MAX_PATH] = {};
+            GetWindowTextW(findDescendant(dlg, IDC_THEME_FILE), buf, MAX_PATH);
+            fileLabel = buf;
+            HWND list = findDescendant(dlg, IDC_THEME_LIST);
+            int keywordRow = 4 + static_cast<int>(TokenClass::Keyword) - 1;
+            SendMessageW(list, LB_SETCURSEL, keywordRow, 0);
+            SendMessageW(GetParent(list), WM_COMMAND, MAKEWPARAM(IDC_THEME_LIST, LBN_SELCHANGE),
+                         reinterpret_cast<LPARAM>(list));
+            SendMessageW(findDescendant(dlg, IDC_THEME_BOLD), BM_CLICK, 0, 0);
+            // Foreground button opens the color picker: accept it unchanged.
+            SetTimer(nullptr, 0, 200, [](HWND, UINT, UINT_PTR id, DWORD) {
+                HWND found = nullptr;
+                EnumThreadWindows(
+                    GetCurrentThreadId(),
+                    [](HWND w, LPARAM p) -> BOOL {
+                        wchar_t cls[32] = {}, title[64] = {};
+                        GetClassNameW(w, cls, 32);
+                        GetWindowTextW(w, title, 64);
+                        if (wcscmp(cls, L"#32770") == 0 && IsWindowVisible(w) &&
+                            wcsncmp(title, L"tcl-syntaxhl settings", 21) != 0) {
+                            *reinterpret_cast<HWND*>(p) = w;
+                            return FALSE;
+                        }
+                        return TRUE;
+                    },
+                    reinterpret_cast<LPARAM>(&found));
+                if (found) {
+                    KillTimer(nullptr, id);
+                    PostMessageW(found, WM_COMMAND, IDOK, 0);
+                }
+            });
+            SendMessageW(findDescendant(dlg, IDC_THEME_FG), BM_CLICK, 0, 0);
+            colorDialogSeen = true;
+            SendMessageW(dlg, WM_COMMAND, IDOK, 0);
+        };
+        SetTimer(nullptr, 0, 100, dialogTimer);
+        PostMessageW(h, WM_COMMAND, IDM_SETTINGS, 0);
+        pump(3000);
+        check(g_dialogSeen && colorDialogSeen, "theme editor driven");
+        check(fileLabel.find(L"python.theme") != std::wstring::npos, "editor opens the current language's theme");
+        std::string saved;
+        readFileBytes(themeFile, saved);
+        check(saved.find("keyword=") != std::string::npos && saved.find(",bold") != std::string::npos,
+              "keyword bold written to python.theme");
+        check(saved.find("decorator=") != std::string::npos, "existing entries kept");
+        check(saved.find("; Python overrides") != std::string::npos, "comments kept");
+        check(boldAt(kwPos), "view reloaded: keywords now bold");
+        close(h);
+        writeFile(themeFile, themeBackup);
+        g_dialogScript = nullptr;
+    }
+
+    section("dark mode dialogs");
+    {
+        HWND h = open(g_samples / "sample.ini", lcp_darkmode);
+        COLORREF dlgColor = 0, editColor = 0;
+        g_dialogSeen = false;
+        g_dialogScript = [&](HWND dlg) {
+            HDC dc = GetDC(dlg);
+            auto color = [&](UINT msg, HWND ctl) {
+                auto br = reinterpret_cast<HBRUSH>(SendMessageW(dlg, msg, reinterpret_cast<WPARAM>(dc),
+                                                                reinterpret_cast<LPARAM>(ctl)));
+                LOGBRUSH lb{};
+                if (br) GetObjectW(br, sizeof lb, &lb);
+                return lb.lbColor;
+            };
+            dlgColor = color(WM_CTLCOLORDLG, dlg);
+            HWND page = GetParent(findDescendant(dlg, IDC_GEN_MAXSIZE));
+            auto br = reinterpret_cast<HBRUSH>(SendMessageW(page, WM_CTLCOLOREDIT, reinterpret_cast<WPARAM>(dc),
+                                                            reinterpret_cast<LPARAM>(findDescendant(dlg, IDC_GEN_MAXSIZE))));
+            LOGBRUSH lb{};
+            if (br) GetObjectW(br, sizeof lb, &lb);
+            editColor = lb.lbColor;
+            ReleaseDC(dlg, dc);
+            SendMessageW(dlg, WM_COMMAND, IDCANCEL, 0);
+        };
+        SetTimer(nullptr, 0, 100, dialogTimer);
+        PostMessageW(h, WM_COMMAND, IDM_SETTINGS, 0);
+        pump(1500);
+        check(g_dialogSeen, "settings window opened in dark mode");
+        check(dlgColor == RGB(32, 32, 32), "dark dialog background");
+        check(editColor == RGB(43, 43, 43), "dark edit background");
+        close(h);
         g_dialogScript = nullptr;
     }
 

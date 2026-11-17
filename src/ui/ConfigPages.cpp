@@ -13,6 +13,7 @@
 #include "core/TextUtil.h"
 #include "core/Theme.h"
 #include "plugin/WinUtil.h"
+#include "DarkMode.h"
 #include "resource.h"
 
 namespace shl::ui {
@@ -168,6 +169,7 @@ private:
 // ------------------------------------------------------------------ Add language dialog
 struct AddLanguageData {
     const std::vector<LanguageDef>* existing;
+    bool dark;
     std::string name, lexer, extensions;
 };
 
@@ -175,9 +177,14 @@ const wchar_t* kRulesOnly = L"(rules file only)";
 
 INT_PTR CALLBACK addLanguageProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp) {
     auto* d = reinterpret_cast<AddLanguageData*>(GetWindowLongPtrW(dlg, DWLP_USER));
+    if (d && d->dark) {
+        INT_PTR r = 0;
+        if (dark::handleMessage(dlg, msg, wp, lp, r)) return r;
+    }
     switch (msg) {
         case WM_INITDIALOG: {
             SetWindowLongPtrW(dlg, DWLP_USER, lp);
+            if (reinterpret_cast<AddLanguageData*>(lp)->dark) dark::applyToDialog(dlg);
             HWND lexer = GetDlgItem(dlg, IDC_ADD_LEXER);
             for (const auto& id : nativeLexerIds()) comboAdd(lexer, win::widen(id));
             comboAdd(lexer, kRulesOnly);
@@ -365,6 +372,7 @@ private:
                                      gr.left + unit.right, y, gr.right - gr.left - 2 * unit.right, unit.bottom, hwnd_,
                                      nullptr, win::g_instance, nullptr);
             SendMessageW(h, WM_SETFONT, reinterpret_cast<WPARAM>(font), FALSE);
+            if (dark_) dark::applyToControl(h);
             optionChecks_.push_back(h);
             return;
         }
@@ -374,6 +382,7 @@ private:
                                      gr.right - gr.left - 2 * unit.right, unit.bottom, hwnd_,
                                      reinterpret_cast<HMENU>(static_cast<INT_PTR>(id++)), win::g_instance, nullptr);
             SendMessageW(h, WM_SETFONT, reinterpret_cast<WPARAM>(font), FALSE);
+            if (dark_) dark::applyToControl(h);
             setChecked(h, l.options.getBool(d.key, parseBool(d.defaultValue, false)));
             optionChecks_.push_back(h);
             optionDefs_.push_back(&d);
@@ -430,7 +439,7 @@ private:
 
     void addLanguage() {
         commit();
-        AddLanguageData d{&langs_, {}, {}, {}};
+        AddLanguageData d{&langs_, dark_, {}, {}, {}};
         if (DialogBoxParamW(win::g_instance, MAKEINTRESOURCEW(IDD_ADD_LANGUAGE), hwnd_, addLanguageProc,
                             reinterpret_cast<LPARAM>(&d)) != IDOK)
             return;
@@ -463,41 +472,11 @@ private:
     std::vector<const OptionDef*> optionDefs_;
 };
 
-// ------------------------------------------------------------------ Theme (phase 2: editor)
-class ThemePage final : public ConfigPage {
-public:
-    explicit ThemePage(const ConfigContext& ctx) : ctx_(ctx) {}
-    const wchar_t* title() const override { return L"Theme"; }
-    int dialogId() const override { return IDD_PAGE_THEME; }
-    void init() override {
-        SetWindowTextW(item(IDC_THEME_INFO),
-                       L"Colors are defined in theme sets: folders under \"themes\" next to the plugin. "
-                       L"default.theme holds the base palette; <language>.theme files override it for one language "
-                       L"(e.g. python.theme). The active set is chosen on the General page.\n\n"
-                       L"A color editor will be added here. Until then, edit the .theme files with any text editor; "
-                       L"changes apply the next time a file is opened.");
-    }
-    void load(const Config&) override {}
-    void store(Config&) override {}
-    INT_PTR handle(UINT msg, WPARAM wp, LPARAM) override {
-        if (msg == WM_COMMAND && LOWORD(wp) == IDC_THEME_OPEN_FOLDER) {
-            auto dir = (ctx_.pluginDir / L"themes").wstring();
-            ShellExecuteW(hwnd_, L"open", dir.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
-            return TRUE;
-        }
-        return FALSE;
-    }
-
-private:
-    ConfigContext ctx_;
-};
-
 }  // namespace
 
 std::unique_ptr<ConfigPage> createGeneralPage(const ConfigContext& ctx) { return std::make_unique<GeneralPage>(ctx); }
 std::unique_ptr<ConfigPage> createLanguagesPage(const ConfigContext& ctx) {
     return std::make_unique<LanguagesPage>(ctx);
 }
-std::unique_ptr<ConfigPage> createThemePage(const ConfigContext& ctx) { return std::make_unique<ThemePage>(ctx); }
 
 }  // namespace shl::ui

@@ -2,6 +2,7 @@
 
 #include <string>
 
+#include "DarkMode.h"
 #include "plugin/WinUtil.h"
 #include "resource.h"
 
@@ -32,15 +33,21 @@ namespace {
 struct DlgData {
     size_t current;
     size_t count;
+    bool dark;
     GotoTarget result;
 };
 
 INT_PTR CALLBACK dlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp) {
     auto* d = reinterpret_cast<DlgData*>(GetWindowLongPtrW(dlg, DWLP_USER));
+    if (d && d->dark) {
+        INT_PTR r = 0;
+        if (dark::handleMessage(dlg, msg, wp, lp, r)) return r;
+    }
     switch (msg) {
         case WM_INITDIALOG: {
             d = reinterpret_cast<DlgData*>(lp);
             SetWindowLongPtrW(dlg, DWLP_USER, lp);
+            if (d->dark) dark::applyToDialog(dlg);
             std::wstring label = L"Line number (1 - " + std::to_wstring(d->count) + L"), or line:column:";
             SetDlgItemTextW(dlg, IDC_GOTO_LABEL, label.c_str());
             SetDlgItemTextW(dlg, IDC_GOTO_EDIT, std::to_wstring(d->current).c_str());
@@ -75,8 +82,8 @@ INT_PTR CALLBACK dlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp) {
 }
 }  // namespace
 
-std::optional<GotoTarget> showGotoLineDialog(HWND owner, size_t currentLine, size_t lineCount) {
-    DlgData d{currentLine, lineCount ? lineCount : 1, {}};
+std::optional<GotoTarget> showGotoLineDialog(HWND owner, size_t currentLine, size_t lineCount, bool dark) {
+    DlgData d{currentLine, lineCount ? lineCount : 1, dark, {}};
     INT_PTR r = DialogBoxParamW(win::g_instance, MAKEINTRESOURCEW(IDD_GOTO), owner, dlgProc,
                                 reinterpret_cast<LPARAM>(&d));
     if (r != IDOK) return std::nullopt;

@@ -30,6 +30,9 @@ public:
     virtual void store(Config& cfg) = 0;  // controls -> settings
     // WM_COMMAND / WM_NOTIFY etc. of the page; return TRUE if handled.
     virtual INT_PTR handle(UINT msg, WPARAM wp, LPARAM lp) { return FALSE; }
+    // Saves data kept outside the plugin INI (e.g. a theme file) on OK/Apply,
+    // after the INI was written. Return false and set `error` on failure.
+    virtual bool saveExternal(std::wstring& error) { return true; }
 
     HWND hwnd() const { return hwnd_; }
     HWND item(int id) const { return GetDlgItem(hwnd_, id); }
@@ -38,11 +41,15 @@ public:
 
 protected:
     HWND hwnd_ = nullptr;
+    bool dark_ = false;  // dialog drawn in dark mode
     friend class ConfigDialog;
 };
 
 struct ConfigContext {
     std::filesystem::path pluginDir;
+    bool dark = false;          // Total Commander is in dark mode
+    std::string themeSet;       // active theme set of the current file
+    std::string languageId;     // language of the current file ("" if none)
 };
 
 class ConfigDialog {

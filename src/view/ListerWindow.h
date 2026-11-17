@@ -47,6 +47,7 @@ private:
     size_t currentLine() const;
     void scrollToCenter(LONG cp);
     bool navigationAtLimit(UINT vk, bool ctrl) const;
+    void wheelScroll(int delta, bool horizontal);
     std::string caretInfo() const;
     LONG topCp() const;
     LONG bottomCp() const;
@@ -80,6 +81,8 @@ private:
     int lastPercent_ = -1;
     LONG lastTopCp_ = -1, lastBottomCp_ = -1;
     bool settingsOpen_ = false;
+    std::string languageId_;
+    int wheelAccumV_ = 0, wheelAccumH_ = 0;
 };
 
 }  // namespace shl::view

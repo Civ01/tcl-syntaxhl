@@ -17,6 +17,6 @@ struct GotoTarget {
 std::optional<GotoTarget> parseGotoInput(std::wstring_view s, size_t maxLine);
 
 // Modal "Go to line" dialog. Returns nullopt when cancelled.
-std::optional<GotoTarget> showGotoLineDialog(HWND owner, size_t currentLine, size_t lineCount);
+std::optional<GotoTarget> showGotoLineDialog(HWND owner, size_t currentLine, size_t lineCount, bool dark = false);
 
 }  // namespace shl::ui

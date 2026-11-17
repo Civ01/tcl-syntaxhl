@@ -27,6 +27,7 @@ Requirements: Windows 10 or later, Total Commander x64. Dark-mode following need
 | F7, Ctrl+F / F3 (find next) | Lister search, with case, whole-word and backwards options |
 | Ctrl+C, Ctrl+A | Copy the selection, select all |
 | Ctrl+G | Go to line (`123` or `123:45` for line:column) |
+| Mouse wheel | Scrolls immediately by whole lines (system "lines per notch"), not animated |
 | Ctrl+Mouse wheel | Zoom (per window, not saved) |
 | Lister "Wrap text" option | Word wrap on/off |
 | Right click | Context menu (Copy, Select all, Go to line, Settings…) |
@@ -44,9 +45,15 @@ Right-click in the viewer and choose **Settings…** to change options in a wind
 - **General** has all `[General]` options.
 - **Languages** lets you add or remove languages and edit their extensions, lexer,
   overrides and lexer options. It also shows the detect string to copy into TC.
-- **Theme** opens the themes folder; a color editor will come later.
+- **Theme** edits any `.theme` file. It starts with the current language's file,
+  and *Load theme file…* opens a picker in the `themes` folder (type a new name to
+  create a file). For each view color or token class you get the color picker
+  (full spectrum), background or "none", bold/italic/underline, *Reset to
+  inherited*, and a live preview. Entries the file doesn't set are shown as
+  inherited; • marks entries set in the file.
 
-*OK* or *Apply* saves and reloads the current file. Only the values you changed
+The settings window follows Total Commander's dark mode. *OK* or *Apply* saves and
+reloads the current file. Only the values you changed
 are rewritten, so comments and unknown keys stay. You can also edit the INI by hand.
 
 The INI file is fully commented. The important settings are:

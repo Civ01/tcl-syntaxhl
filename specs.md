@@ -194,7 +194,12 @@ struct LexerFactory {
    - For the selected language: extensions; the lexer (native lexer id, or a rules file only); and the tokenizer, italic-comments and tab-width overrides ("(default)" means inherit from General).
    - Checkboxes for that lexer's options, generated from the schema.
    - A read-only **detect string** with a *Copy* button, plus a note that TC caches it: after changing extensions, paste it in *Options → Plugins → Lister → Configure*.
-3. **Theme:** phase 2 is an editor for token colors and styles per set and language, writing `<set>/<lang>.theme` or `default.theme` with the same minimal-diff saving. Until then, the page has an *Open themes folder* button.
+3. **Theme:** an editor for any `.theme` file.
+   - **Opening:** it starts with `<active set>/<current language>.theme`, or the set's `default.theme`. *Load theme file…* opens a file picker in `themes/`; a new name creates a file on save. *Open themes folder* is next to it.
+   - **List:** the four `[View]` colors and every token class, each with a swatch. A • marks entries the file sets itself.
+   - **Values:** shown resolved, i.e. inherited from the built-in palette plus, for language files, the same set's `default.theme`. A note says whether a value is inherited, set, or an `@alias`.
+   - **Editing:** foreground and background use the system color picker (`ChooseColor`, full spectrum view). There are also "no background", bold/italic/underline, *Reset to inherited*, and a preview in the configured font.
+   - **Saving:** edits go into the file's own entries; an `@alias` is turned into concrete values on the first edit. The file is saved on OK/Apply through `ConfigPage::saveExternal`, changing only the edited entries, and the view then reloads. Loading another file with unsaved edits asks first.
 
 **Validation rules:**
 - Size must parse.
@@ -202,7 +207,15 @@ struct LexerFactory {
 - Extensions must be non-empty.
 - A language name must be unique, contain only `[A-Za-z0-9_+-]` (it becomes a theme or rules file name), and must not be `General` or `Languages`.
 
-**Not in scope yet:** dark-mode painting of the settings window, and the theme editor (phase 2).
+**Dark mode:** the settings, add-language and go-to-line dialogs follow Total Commander's dark mode (`lcp_darkmode`) automatically, via `ui/DarkMode`:
+- DWM dark title bar.
+- `WM_CTLCOLOR*` brushes from a fixed dark palette.
+- The system `DarkMode_Explorer` / `DarkMode_CFD` themes for buttons, edits, combos, lists and scrollbars.
+- Unthemed check boxes and group boxes, so their dark text color applies.
+- An owner-painted tab strip.
+- uxtheme's `SetPreferredAppMode` / `AllowDarkModeForWindow` (looked up by ordinal, skipped when missing), which also makes the viewer's context menu dark.
+
+**Backlog (unlikely):** renaming languages and reordering `[Languages]` from the window.
 
 ---
 
@@ -522,6 +535,7 @@ tests/
 - **`lcs_findfirst`:** searches from the beginning of the first displayed line, as the TC docs specify; backwards, from the end of the last displayed line.
 - **Releases:** pushing a tag `vX.Y.Z[-label]` runs `.github/workflows/release.yml`. It builds with MSVC, runs the tests, stamps the version into the DLL resource and the zip name, and publishes a GitHub release (a pre-release when a label is present).
 - **Reference material:** the official `listplug.h`, the sample plugin and the help file (v2.1) were checked against this implementation. Constants and signatures match. `ListPrint`, `ListGetPreviewBitmap`, `ListSearchDialog` and `ListNotificationReceived` are intentionally not exported.
+- **Mouse wheel:** RichEdit animates wheel scrolling, which feels floaty next to Lister. The plugin handles `WM_MOUSEWHEEL`/`WM_MOUSEHWHEEL` itself: it scrolls whole lines at once per `SPI_GETWHEELSCROLLLINES`/`CHARS` (page scrolling when set to `WHEEL_PAGESCROLL`) and accumulates sub-notch deltas from high-resolution wheels and touchpads. Ctrl+wheel still goes to RichEdit for zoom.
 - **Keyboard:** Lister subclasses the plugin window to catch hotkeys. Unhandled `WM_KEYDOWN`/`WM_KEYUP` from the text view are therefore *posted* to the plugin (container) window; posting is safe even when the key (Esc) closes Lister. `WM_CHAR` is not forwarded, because `TranslateMessage` in TC's message loop recreates it from the posted key-down, and forwarding it would double `n`/`p`.
 - **Beeps:** unless `allow_beeps=true`, RichEdit's `SES_ALLOWBEEPS` edit style is cleared. In addition, navigation keys that cannot move the caret (PgDn/Down/Ctrl+End at the end, PgUp/Up/Ctrl+Home at the start, End/Home at the line end/start, Left/Right at the text ends) are swallowed before RichEdit sees them, after scrolling the view to that end.
 - **Diagnostics:** `debug_log=true` writes `tcl-syntaxhl.log`, containing key/scroll messages with caret state and the outcome. It also intercepts `MessageBeep`/`Beep`/`PlaySound` in all loaded modules by patching their import tables and logs the caller module and stack. The DLL pins itself while hooks are installed.
