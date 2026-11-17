@@ -180,6 +180,20 @@ matches only at the start of a line and `$` only at its end. The rules engine
 doesn't see INI options such as `support_jsonc_comments`, so `json.rules` always
 colors comments as comments.
 
+## Troubleshooting
+
+Set `debug_log=true` in `tcl-syntaxhl.ini` and open a file again. The plugin then
+writes `tcl-syntaxhl.log` next to the DLL, or to `%TEMP%` if that folder is
+read-only. The log contains:
+
+- the Total Commander and RichEdit versions;
+- every key and scroll message the text view receives, with caret and scroll state
+  before and after, and whether the plugin or RichEdit handled it;
+- every `MessageBeep`, `Beep` and `PlaySound` call in the process, with the calling
+  module and a short call stack (`*** BEEP ...` lines).
+
+Turn it off again afterwards: the log grows with every key press.
+
 ## Building
 
 The build needs CMake ≥ 3.20 and Visual Studio 2022 (MSVC v143), or MinGW-w64 for cross builds.

@@ -105,6 +105,7 @@ Config Config::fromIni(const IniDocument& ini) {
     if (auto v = ini.get(G, "enable_config_dialog")) c.enableConfigDialog = parseBool(*v, false);
     if (auto v = ini.get(G, "italic_comments")) c.italicComments = parseBool(*v, true);
     if (auto v = ini.get(G, "allow_beeps")) c.allowBeeps = parseBool(*v, false);
+    if (auto v = ini.get(G, "debug_log")) c.debugLog = parseBool(*v, false);
     if (auto v = ini.get(G, "tab_width")) {
         int n = std::atoi(v->c_str());
         if (n >= 1 && n <= 32) c.tabWidth = n;

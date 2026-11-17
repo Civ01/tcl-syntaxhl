@@ -46,6 +46,8 @@ private:
     size_t lineOfOffset(size_t off) const;
     size_t currentLine() const;
     void scrollToCenter(LONG cp);
+    bool navigationAtLimit(UINT vk, bool ctrl) const;
+    std::string caretInfo() const;
     LONG topCp() const;
     LONG bottomCp() const;
     void scrollTopToDisplayLine(LONG displayLine);

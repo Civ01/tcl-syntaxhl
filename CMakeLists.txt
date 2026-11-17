@@ -57,6 +57,7 @@ if(TCL_BUILD_PLUGIN)
   add_library(tcl-syntaxhl SHARED
     src/plugin/exports.cpp
     src/plugin/WinUtil.cpp
+    src/plugin/DebugLog.cpp
     src/view/ListerWindow.cpp
     src/view/InfoBar.cpp
     src/view/Highlighter.cpp
@@ -65,7 +66,7 @@ if(TCL_BUILD_PLUGIN)
     src/ui/resources.rc
     src/plugin/tcl-syntaxhl.def
   )
-  target_link_libraries(tcl-syntaxhl PRIVATE shl_core user32 gdi32 comctl32 uxtheme)
+  target_link_libraries(tcl-syntaxhl PRIVATE shl_core user32 gdi32 comctl32 uxtheme psapi version)
   configure_file(src/ui/version.h.in ${CMAKE_BINARY_DIR}/generated/version.h @ONLY)
   target_include_directories(tcl-syntaxhl PRIVATE ${CMAKE_BINARY_DIR}/generated)
   target_compile_definitions(tcl-syntaxhl PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0A00)

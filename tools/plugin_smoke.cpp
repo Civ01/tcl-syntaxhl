@@ -461,6 +461,45 @@ int wmain(int argc, wchar_t** argv) {
               "tab_width 8 is about twice tab_width 4 (" + std::to_string(w4) + " / " + std::to_string(w8) + " px)");
     }
 
+    section("navigation at the end of the text / debug log");
+    {
+        auto logFile = g_pluginDir / "tcl-syntaxhl.log";
+        std::error_code ec;
+        fs::remove(logFile, ec);
+        IniOverride ov([](IniDocument& d) { d.set("General", "debug_log", "true"); });
+        std::string big;
+        for (int i = 0; i < 300; ++i) big += "k" + std::to_string(i) + "=v\n";
+        writeFile(g_tmp / "nav.ini", big);
+        HWND h = open(g_tmp / "nav.ini");
+        HWND edit = findChild(h, MSFTEDIT_CLASS);
+        GETTEXTLENGTHEX gl{GTL_NUMCHARS | GTL_PRECISE, 1200};
+        LONG len = static_cast<LONG>(SendMessageW(edit, EM_GETTEXTLENGTHEX, reinterpret_cast<WPARAM>(&gl), 0));
+        SendMessageW(edit, EM_SETSEL, len, len);
+        SendMessageW(edit, WM_KEYDOWN, VK_NEXT, 0x01510001);
+        SendMessageW(edit, WM_KEYUP, VK_NEXT, 0xC1510001);
+        SendMessageW(edit, WM_KEYDOWN, VK_DOWN, 0x01500001);
+        CHARRANGE cr{};
+        SendMessageW(edit, EM_EXGETSEL, 0, reinterpret_cast<LPARAM>(&cr));
+        check(cr.cpMin == len && cr.cpMax == len, "caret stays at the end");
+        SendMessageW(edit, EM_SETSEL, 0, 0);
+        SendMessageW(edit, WM_KEYDOWN, VK_PRIOR, 0x01490001);
+        SendMessageW(edit, WM_KEYDOWN, VK_NEXT, 0x01510001);  // not at a limit: RichEdit moves the caret
+        SendMessageW(edit, EM_EXGETSEL, 0, reinterpret_cast<LPARAM>(&cr));
+        check(cr.cpMin > 0, "PgDn still moves the caret when not at the end");
+        MessageBeep(MB_OK);  // from this exe: must be caught by the hook
+        pump(50);
+        close(h);
+        std::string logText;
+        readFileBytes(logFile, logText);
+        check(logText.find("debug log started") != std::string::npos, "debug log written next to the DLL");
+        check(logText.find("edit  <- WM_KEYDOWN wp=0x22") != std::string::npos, "key messages logged");
+        check(logText.find("at limit: swallowed") != std::string::npos, "limit keys swallowed (logged)");
+        check(logText.find("*** BEEP MessageBeep") != std::string::npos &&
+                  logText.find("plugin_smoke.exe") != std::string::npos,
+              "MessageBeep intercepted with caller module");
+        fs::remove(logFile, ec);
+    }
+
     section("ListLoadNext");
     {
         HWND h = open(g_samples / "sample.json");

@@ -12,6 +12,7 @@
 #include "core/Settings.h"
 #include "core/TextDecoder.h"
 #include "core/TextUtil.h"
+#include "plugin/DebugLog.h"
 #include "plugin/WinUtil.h"
 #include "plugin/listplug.h"
 #include "ui/ConfigDialog.h"
@@ -114,6 +115,8 @@ bool ListerWindow::load(const std::wstring& file, int showFlags) {
     Config cfg;
     IniDocument doc;
     cfg = IniDocument::loadFile(ini, doc, ansi) ? Config::fromIni(doc) : Config::defaults();
+    dbg::configure(cfg.debugLog);
+    dbg::log("load %s flags=0x%x quickView=%d", win::narrow(file).c_str(), showFlags, quickView_ ? 1 : 0);
     const LanguageDef* lang = cfg.languageForFile(fs::path(file));
     // lcp_forceshow: the user explicitly chose this plugin ("Image/Multimedia"),
     // so unknown files are shown as plain text instead of being refused.
@@ -157,6 +160,8 @@ bool ListerWindow::load(const std::wstring& file, int showFlags) {
     // RichEdit beeps when navigation hits the start/end of the text (PgDn at
     // the end, ...). Lister itself is silent, so beeps are off unless enabled.
     SendMessageW(edit_, EM_SETEDITSTYLE, cfg_.allowBeeps ? SES_ALLOWBEEPS : 0, SES_ALLOWBEEPS);
+    dbg::log("allow_beeps=%d -> edit style now 0x%llx", cfg_.allowBeeps ? 1 : 0,
+             static_cast<unsigned long long>(SendMessageW(edit_, EM_GETEDITSTYLE, 0, 0)));
 
     std::vector<std::wstring> notices;
     if (!lexer_) mode_ = RenderMode::Plain;
@@ -319,6 +324,43 @@ void ListerWindow::setPercent(int pct) {
     viewChanged();
 }
 
+// True if a navigation key cannot move the caret (start/end of text, line or
+// first/last line), i.e. RichEdit would reject it with a beep.
+bool ListerWindow::navigationAtLimit(UINT vk, bool ctrl) const {
+    CHARRANGE cr{};
+    SendMessageW(edit_, EM_EXGETSEL, 0, reinterpret_cast<LPARAM>(&cr));
+    GETTEXTLENGTHEX gl{GTL_NUMCHARS | GTL_PRECISE, 1200};
+    LONG len = static_cast<LONG>(SendMessageW(edit_, EM_GETTEXTLENGTHEX, reinterpret_cast<WPARAM>(&gl), 0));
+    bool forward = vk == VK_DOWN || vk == VK_NEXT || vk == VK_END || vk == VK_RIGHT;
+    LONG caret = forward ? cr.cpMax : cr.cpMin;
+    LONG line = static_cast<LONG>(SendMessageW(edit_, EM_EXLINEFROMCHAR, 0, caret));
+    LONG lines = static_cast<LONG>(SendMessageW(edit_, EM_GETLINECOUNT, 0, 0));
+    LONG lineStart = static_cast<LONG>(SendMessageW(edit_, EM_LINEINDEX, line, 0));
+    LONG lineLen = static_cast<LONG>(SendMessageW(edit_, EM_LINELENGTH, caret, 0));
+    switch (vk) {
+        case VK_DOWN:
+        case VK_NEXT: return line >= lines - 1 && caret >= len;
+        case VK_UP:
+        case VK_PRIOR: return line == 0 && caret == 0;
+        case VK_END: return ctrl ? caret >= len : caret >= lineStart + lineLen;
+        case VK_HOME: return ctrl ? caret == 0 : caret == lineStart;
+        case VK_RIGHT: return caret >= len;
+        case VK_LEFT: return caret == 0;
+    }
+    return false;
+}
+
+std::string ListerWindow::caretInfo() const {
+    CHARRANGE cr{};
+    SendMessageW(edit_, EM_EXGETSEL, 0, reinterpret_cast<LPARAM>(&cr));
+    char buf[160];
+    std::snprintf(buf, sizeof buf, "[sel %ld-%ld line %lld/%lld firstVisible %lld]", cr.cpMin, cr.cpMax,
+                  static_cast<long long>(SendMessageW(edit_, EM_EXLINEFROMCHAR, 0, cr.cpMax)),
+                  static_cast<long long>(SendMessageW(edit_, EM_GETLINECOUNT, 0, 0)),
+                  static_cast<long long>(SendMessageW(edit_, EM_GETFIRSTVISIBLELINE, 0, 0)));
+    return buf;
+}
+
 size_t ListerWindow::lineOfOffset(size_t off) const {
     auto it = std::upper_bound(lineStarts_.begin(), lineStarts_.end(), static_cast<uint32_t>(off));
     return it == lineStarts_.begin() ? 0 : static_cast<size_t>(it - lineStarts_.begin()) - 1;
@@ -459,6 +501,11 @@ void ListerWindow::openSettings() {
 
 LRESULT CALLBACK ListerWindow::containerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     auto* self = fromHwnd(hwnd);
+    if (self && dbg::on()) {
+        if (const char* name = dbg::messageName(msg))
+            dbg::log("panel <- %s wp=0x%llx lp=0x%llx", name, static_cast<unsigned long long>(wp),
+                     static_cast<unsigned long long>(lp));
+    }
     if (self) {
         try {
             switch (msg) {
@@ -495,10 +542,21 @@ LRESULT CALLBACK ListerWindow::editProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
     WNDPROC orig = self->origEditProc_;
     bool handled = false;
     LRESULT r = 0;
+    const char* name = dbg::on() ? dbg::messageName(msg) : nullptr;
+    if (name) dbg::log("edit  <- %s wp=0x%llx lp=0x%llx %s", name, static_cast<unsigned long long>(wp),
+                       static_cast<unsigned long long>(lp), self->caretInfo().c_str());
     try {
         r = self->handleEditMessage(hwnd, msg, wp, lp, handled);
     } catch (...) {
         handled = false;
+    }
+    if (name && handled) dbg::log("edit     %s handled by plugin -> %lld %s", name, static_cast<long long>(r),
+                                  self->caretInfo().c_str());
+    if (name && !handled) {
+        LRESULT res = CallWindowProcW(orig, hwnd, msg, wp, lp);
+        dbg::log("edit     %s passed to RichEdit -> %lld %s", name, static_cast<long long>(res),
+                 self->caretInfo().c_str());
+        return res;
     }
     if (msg == WM_NCDESTROY) {
         RemovePropW(hwnd, kPropSelf);
@@ -521,6 +579,19 @@ LRESULT ListerWindow::handleEditMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
             switch (wp) {
                 case VK_UP: case VK_DOWN: case VK_LEFT: case VK_RIGHT:
                 case VK_PRIOR: case VK_NEXT: case VK_HOME: case VK_END: {
+                    if (!cfg_.allowBeeps && navigationAtLimit(static_cast<UINT>(wp), ctrl)) {
+                        // The caret cannot move any further: RichEdit would refuse
+                        // the key and beep. Swallow it (and make sure the view is
+                        // scrolled to that end, as the key intended).
+                        bool down = wp == VK_DOWN || wp == VK_NEXT || (wp == VK_END && ctrl);
+                        bool up = wp == VK_UP || wp == VK_PRIOR || (wp == VK_HOME && ctrl);
+                        if (down) SendMessageW(edit_, WM_VSCROLL, SB_BOTTOM, 0);
+                        if (up) SendMessageW(edit_, WM_VSCROLL, SB_TOP, 0);
+                        dbg::log("edit     key 0x%llx at limit: swallowed", static_cast<unsigned long long>(wp));
+                        handled = true;
+                        viewChanged();
+                        return 0;
+                    }
                     LRESULT res = CallWindowProcW(origEditProc_, hwnd, msg, wp, lp);
                     handled = true;
                     viewChanged();

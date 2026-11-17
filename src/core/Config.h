@@ -51,6 +51,7 @@ struct Config {
     int fontSize = 10;
     int tabWidth = 4;            // columns per tab stop (display only)
     bool allowBeeps = false;     // RichEdit beeps (e.g. PgDn at the end of the file)
+    bool debugLog = false;       // write tcl-syntaxhl.log (troubleshooting)
     bool enableConfigDialog = false;
     bool italicComments = true;  // false: never draw comments in italic
     std::vector<LanguageDef> languages;
