@@ -655,6 +655,26 @@ int wmain(int argc, wchar_t** argv) {
         }
     }
 
+    section("extension added in [Languages] (JS=...,pac)");
+    {
+        auto pac = g_samples / "sample.pac";
+        HWND h = open(pac);
+        check(h == nullptr, ".pac is not handled with the default INI");
+        close(h);
+        IniOverride ov([](IniDocument& d) { d.set("Languages", "JS", "js,mjs,cjs,pac"); });
+        char buf[2048] = {};
+        api.detect(buf, sizeof buf);
+        check(std::string(buf).find("EXT=\"PAC\"") != std::string::npos, "detect string now contains PAC");
+        h = open(pac);
+        check(h != nullptr, ".pac loads after adding it to JS=");
+        if (h) {
+            auto e = expectedFor(pac, false);
+            check(!e.tokens.empty(), ".pac is lexed as JS");
+            check(compareColors(findChild(h, MSFTEDIT_CLASS), e) == 0, ".pac colors (JS)");
+            close(h);
+        }
+    }
+
     section("options: jsonc + scss");
     {
         IniOverride ov([](IniDocument& d) {

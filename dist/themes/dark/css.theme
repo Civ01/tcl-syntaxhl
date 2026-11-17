@@ -1,0 +1,32 @@
+; CSS colors for the dark theme.
+; Every class the CSS lexers use is listed (native and rules/css.rules); the
+; values equal default.theme, so edit only what you want to change - or delete
+; a line to fall back to default.theme.
+; Format: class=foreground[,background][,flags]   (see default.theme)
+[Tokens]
+; /* ... */ (and // in SCSS/LESS mode)
+comment=#6A9955,,italic
+; @media, @import, @font-face, @mixin, ...
+at_rule=#C586C0
+; tag, .class, #id, &, *
+selector=#D7BA7D
+; :hover / ::before pseudo-classes, !important, and/or/not in @media
+keyword=#569CD6
+; attribute names in [attr=...]
+key=#9CDCFE
+; color, margin, --custom-property, ...
+property=#9CDCFE
+; keyword values: auto, no-repeat, sans-serif, ...
+value=#CE9178
+; 10px, -1.5em, 50%, #ff0000 colors
+number=#B5CEA8
+; "..." / '...' and unquoted url(...) addresses
+string=#CE9178
+; url(), calc(), var(), rgba(), ...
+function=#DCDCAA
+; $var / @var / #{...} (SCSS/LESS mode)
+variable=#9CDCFE
+; , > + ~ / and other operators
+operator=#D4D4D4
+; { } ( ) : ; [ ]
+punctuation=#D4D4D4

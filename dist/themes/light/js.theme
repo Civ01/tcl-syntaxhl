@@ -1,0 +1,34 @@
+; JavaScript colors for the light theme.
+; Every class the JS lexers use is listed (native and rules/js.rules); the
+; values equal default.theme, so edit only what you want to change - or delete
+; a line to fall back to default.theme.
+; Format: class=foreground[,background][,flags]   (see default.theme)
+[Tokens]
+; // line and /* block */ comments, #! first line
+comment=#008000,,italic
+; const, function, return, class, this, ...
+keyword=#0000FF
+; true, false, null, undefined, NaN, Infinity
+constant=#0000FF
+; console, Math, JSON, Promise, Object, ...
+builtin=#267F99
+; function names (declarations and calls: name(...))
+function=#795E26
+; class names after "class" (native lexer)
+type=#267F99
+; other names
+identifier=#000000
+; 123, 0xFF, 1_000.5e3, 10n
+number=#098658
+; '...' and "..."
+string=#A31515
+; \n, \t, \u00e9, \x41 ... inside strings and templates
+string_escape=#EE0000
+; `template ${...} literals`
+template=#A31515
+; /regex/flags literals
+regex=#811F3F
+; = + - * / => && ...
+operator=#000000
+; ( ) [ ] { } , ; .
+punctuation=#000000

@@ -1,0 +1,32 @@
+; CSS colors for the light theme.
+; Every class the CSS lexers use is listed (native and rules/css.rules); the
+; values equal default.theme, so edit only what you want to change - or delete
+; a line to fall back to default.theme.
+; Format: class=foreground[,background][,flags]   (see default.theme)
+[Tokens]
+; /* ... */ (and // in SCSS/LESS mode)
+comment=#008000,,italic
+; @media, @import, @font-face, @mixin, ...
+at_rule=#AF00DB
+; tag, .class, #id, &, *
+selector=#800000
+; :hover / ::before pseudo-classes, !important, and/or/not in @media
+keyword=#0000FF
+; attribute names in [attr=...]
+key=#0451A5
+; color, margin, --custom-property, ...
+property=#E50000
+; keyword values: auto, no-repeat, sans-serif, ...
+value=#000000
+; 10px, -1.5em, 50%, #ff0000 colors
+number=#098658
+; "..." / '...' and unquoted url(...) addresses
+string=#A31515
+; url(), calc(), var(), rgba(), ...
+function=#795E26
+; $var / @var / #{...} (SCSS/LESS mode)
+variable=#001080
+; , > + ~ / and other operators
+operator=#000000
+; { } ( ) : ; [ ]
+punctuation=#000000

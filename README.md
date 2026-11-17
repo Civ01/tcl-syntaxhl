@@ -74,11 +74,21 @@ exception (see below).
 ### Changing file extensions
 
 Total Commander asks a plugin for its *detect string* (the list of extensions it
-handles) only when the plugin is installed, and then caches it. After you edit
-`[Languages]`, do one of the following:
+handles) only when the plugin is first added, and caches it in `wincmd.ini`
+(`[ListerPlugins]`, key `<n>_detect`). Editing `[Languages]` therefore has no
+effect on which files TC hands to the plugin until the cached string is
+updated. For example, after adding `pac` to `JS=js,mjs,cjs,pac`, do one of the
+following:
 
-- Remove the plugin in *Options → Plugins → Lister* and add it again.
-- Edit the detect string by hand in the same dialog, e.g. append `| EXT="SCSS"`.
+- In *Configuration → Options → Plugins → Lister plugins (WLX) → Configure*,
+  select `tcl-syntaxhl` and append `| EXT="PAC"` to its detection string.
+- Remove the plugin in that dialog and add it again, so TC asks for a fresh string.
+- Close TC and edit `<n>_detect=` in the `[ListerPlugins]` section of
+  `wincmd.ini` directly.
+
+The plugin itself rereads `tcl-syntaxhl.ini` every time a file is opened, so no
+other step is needed. Make sure you edit the INI next to the *installed*
+`tcl-syntaxhl.wlx64`, not a copy elsewhere.
 
 ### Large files
 
@@ -100,7 +110,9 @@ support_jsonc_comments=true
 ## Themes
 
 A theme set is a folder under `themes\`. Inside it, `default.theme` holds the base
-palette, and `<language>.theme` files hold only the overrides for one language. The
+palette, and `<language>.theme` files hold the overrides for one language. The
+shipped `ini.theme`, `js.theme` and `css.theme` list every class those lexers
+use, so they show what can be changed. The
 language name is the lowercase key from `[Languages]`: for example, `python.theme`.
 
 ```ini

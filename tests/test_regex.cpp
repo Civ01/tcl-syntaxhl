@@ -180,3 +180,29 @@ TEST_CASE("regex: shipped rules survive random input and are resumable on sample
         }
     }
 }
+
+TEST_CASE("themes: language theme files list every class their lexers emit") {
+    struct Case { const char* lang; const char* rules; const char* sample; } cases[] = {
+        {"ini", "ini.rules", "sample.ini"}, {"js", "js.rules", "sample.js"}, {"css", "css.rules", "sample.css"}};
+    for (auto& c : cases) {
+        CAPTURE(c.lang);
+        std::vector<LexerPtr> lexers;
+        lexers.push_back(createNativeLexer(c.lang, opts({{"support_scss_less", "true"}})));
+        lexers.push_back(shippedRules(c.rules));
+        std::string text = sampleText(c.sample);
+        for (const char* set : {"light", "dark"}) {
+            IniDocument doc;
+            REQUIRE(IniDocument::loadFile(fs::path(SHL_SOURCE_DIR) / "dist" / "themes" / set /
+                                              (std::string(c.lang) + ".theme"),
+                                          doc));
+            for (auto& lx : lexers) {
+                auto l = lexWith(*lx, text);
+                for (const auto& t : l.tokens) {
+                    CAPTURE(set);
+                    CAPTURE(tokenClassName(t.cls));
+                    CHECK(doc.get("Tokens", tokenClassName(t.cls)).has_value());
+                }
+            }
+        }
+    }
+}
