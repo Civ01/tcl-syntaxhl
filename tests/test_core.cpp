@@ -135,6 +135,19 @@ TEST_CASE("theme: section_bracket inherits punctuation, @alias, flags") {
     }
 }
 
+TEST_CASE("config: tab_width and allow_beeps") {
+    auto cfg = Config::fromIni(IniDocument::parse(std::string_view(
+        "[General]\ntab_width=8\nallow_beeps=true\n[Python]\ntab_width=2\n[JSON]\ntab_width=99\n")));
+    CHECK(cfg.tabWidth == 8);
+    CHECK(cfg.allowBeeps);
+    CHECK(cfg.tabWidthFor(*cfg.languageForExtension("py")) == 2);
+    CHECK(cfg.tabWidthFor(*cfg.languageForExtension("json")) == 8);  // out of range -> global
+    auto def = Config::defaults();
+    CHECK(def.tabWidth == 4);
+    CHECK_FALSE(def.allowBeeps);
+    CHECK(Config::fromIni(IniDocument::parse(std::string_view("[General]\ntab_width=0\n"))).tabWidth == 4);
+}
+
 TEST_CASE("config: theme auto selection") {
     Config c;
     CHECK(c.themeSet(false) == "light");
@@ -258,6 +271,8 @@ TEST_CASE("shipped ini parses and matches defaults") {
     CHECK(cfg.maxHighlightSize == def.maxHighlightSize);
     CHECK(cfg.useLazyHighlight == def.useLazyHighlight);
     CHECK(cfg.italicComments == def.italicComments);
+    CHECK(cfg.tabWidth == def.tabWidth);
+    CHECK(cfg.allowBeeps == def.allowBeeps);
     CHECK(cfg.theme == def.theme);
     CHECK(cfg.fontFace == def.fontFace);
     CHECK(cfg.fontSize == def.fontSize);

@@ -191,6 +191,10 @@ theme_light=light
 theme_dark=dark
 font_face=Consolas
 font_size=10
+; columns per tab character (display only); per-language override possible
+tab_width=4
+; RichEdit beeps at the start/end of the text (off: like Lister)
+allow_beeps=false
 ; false = never draw comments in italic; per-language override: [INI] italic_comments=...
 italic_comments=true
 ; reserved for the future config window
@@ -376,7 +380,7 @@ This syntax is final for v1 and documented in the README; `dist/rules/json.rules
 
 - **`eol_pop=true`** in a `[Rules.<state>]` section ends that state at the end of the line (used by `ini.rules` for unterminated section headers).
 - **Options:** rules files do not see language options (e.g. `support_jsonc_comments`), so `json.rules` always colors comments as comments.
-- **Shipped rules:** `rules/json.rules` and `rules/ini.rules` (the latter must match the native INI lexer character by character; a unit test enforces it). Malformed rules produce an info-bar notice and a native fallback.
+- **Shipped rules:** `rules/json.rules`, `rules/ini.rules`, `rules/css.rules` and `rules/js.rules`. The CSS and JS rules are intentionally simpler than the native lexers: no SCSS/LESS; JS regex literals only after punctuation, operators or at the start of a line; braces inside template `${...}` are not nested. `ini.rules` (the latter must match the native INI lexer character by character; a unit test enforces it). Malformed rules produce an info-bar notice and a native fallback.
 
 ---
 
@@ -485,6 +489,9 @@ tests/
 - **`lcs_findfirst`:** searches from the beginning of the first displayed line, as the TC docs specify; backwards, from the end of the last displayed line.
 - **Releases:** pushing a tag `vX.Y.Z[-label]` runs `.github/workflows/release.yml`. It builds with MSVC, runs the tests, stamps the version into the DLL resource and the zip name, and publishes a GitHub release (a pre-release when a label is present).
 - **Reference material:** the official `listplug.h`, the sample plugin and the help file (v2.1) were checked against this implementation. Constants and signatures match. `ListPrint`, `ListGetPreviewBitmap`, `ListSearchDialog` and `ListNotificationReceived` are intentionally not exported.
+- **Keyboard:** Lister subclasses the plugin window to catch hotkeys. Unhandled `WM_KEYDOWN`/`WM_KEYUP` from the text view are therefore *posted* to the plugin (container) window; posting is safe even when the key (Esc) closes Lister. `WM_CHAR` is not forwarded, because `TranslateMessage` in TC's message loop recreates it from the posted key-down, and forwarding it would double `n`/`p`.
+- **Beeps:** RichEdit's `SES_ALLOWBEEPS` edit style is cleared unless `allow_beeps=true`, so PgDn/End at the end of a file stay silent.
+- **Tab stops:** `tab_width` × the average character width of the font, written as `\deftab` and 32 explicit `\tx` stops in RTF (or `PFM_TABSTOPS` for plain text). Lines with more than 32 tabs fall back to the default spacing.
 - **Quick View:** detected when the parent window class is not `TLister`; the plugin does not take focus in that case.
 - **Encoding notice:** files decoded with the ANSI fallback show no notice. The spec marked it optional, and legacy INI files would trigger it constantly.
 - **Tests:** besides the unit tests, `tools/plugin_smoke` drives the real DLL in a fake `TLister` host. It verifies colors against the core lexers, search, commands, `ListLoadNext`, encodings, plain, lazy and regex modes, and language options. CI runs it on `windows-latest`.
@@ -494,7 +501,7 @@ tests/
 ## 17. Open questions / assumptions to confirm
 
 1. **v1 feature set:** Find, Copy/Select all and word wrap are included; printing is not needed (confirmed).
-2. **Tab width:** fixed at 4 columns, since no INI option was requested. An option can be added if needed.
+2. **Tab width:** configurable as `tab_width` (default 4, per-language override); confirmed.
 3. **Example plugins and the TC Lister SDK docs:** uploaded and checked (see §16).
 4. **`pluginst.inf`:** the package uses `file=tcl-syntaxhl.wlx` (TC x64 picks the `.wlx64`); this needs verification with a real TC install.
 5. **Regex `.rules` syntax and state support:** settled (§9).

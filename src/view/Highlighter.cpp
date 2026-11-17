@@ -141,7 +141,11 @@ std::string buildRtf(std::u16string_view text, const std::vector<Token>& tokens,
     appendEscaped(out, std::u16string(font.face.begin(), font.face.end()));
     out += ";}}{\\colortbl;";
     for (Color c : colors) out += colorEntry(c);
-    out += "}\\pard\\plain\\f0\\fs" + std::to_string(font.pointSize * 2) + "\\cf1 ";
+    // Explicit tab stops (\\tx) in addition to \\deftab: not every RichEdit
+    // honours \\deftab. Paragraph properties carry over to all paragraphs.
+    out += "}\\pard\\plain";
+    for (int i = 1; i <= 32; ++i) out += "\\tx" + std::to_string(i * font.tabTwips);
+    out += "\\f0\\fs" + std::to_string(font.pointSize * 2) + "\\cf1 ";
     out += body;
     out += "}";
     return out;

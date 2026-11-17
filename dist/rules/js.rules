@@ -1,0 +1,107 @@
+; JavaScript rules for the regex tokenizer (tokenizer=regex).
+; Simpler than the native lexer: regex literals are recognised only right after
+; ( , = : [ ! & | ? { } ; and at the start of a line; template ${...}
+; expressions use the main rules and end at the first unmatched '}'.
+; Format: see json.rules / README.md.
+
+[Meta]
+name=JavaScript (regex)
+
+[Rules]
+5=comment:^#!.*
+10=comment://.*
+20=comment:/\*
+20.push=block_comment
+30=string:'
+30.push=sq_string
+40=string:"
+40.push=dq_string
+50=template:`
+50.push=template
+; regex literal at the start of a line
+60=regex:^\s*/(?![/*])(?:\\.|\[(?:\\.|[^\]\\])*\]|[^/\\\[])+/[a-z]*
+70=number:\b(?:0[xX][0-9a-fA-F_]+|0[oO][0-7_]+|0[bB][01_]+|\d[\d_]*(?:\.[\d_]*)?(?:[eE][+-]?\d+)?)n?\b|\.\d[\d_]*(?:[eE][+-]?\d+)?\b
+80=keyword:\b(?:function\*?|class)(?![$\w])
+80.push=decl_name
+90=keyword:\b(?:async|await|break|case|catch|const|continue|debugger|default|delete|do|else|export|extends|finally|for|if|import|in|instanceof|let|new|of|return|static|super|switch|this|throw|try|typeof|var|void|while|with|yield|get|set|from|as)\b(?![$\w])
+100=constant:\b(?:true|false|null|undefined|NaN|Infinity)\b(?![$\w])
+110=builtin:\b(?:console|window|document|globalThis|Object|Array|String|Number|Boolean|Symbol|BigInt|Math|JSON|Date|RegExp|Map|Set|WeakMap|WeakSet|Promise|Proxy|Reflect|Error|TypeError|RangeError|Intl|require|module|exports|process|arguments|setTimeout|setInterval|parseInt|parseFloat)\b(?![$\w])
+120=function:[A-Za-z_$#][\w$]*(?=\s*\()
+130=identifier:[A-Za-z_$#][\w$]*
+; punctuation after which a regex literal may follow
+140=punctuation:[(,\[{;]
+140.push=regex_ok
+150=operator:[=:!&|?]+
+150.push=regex_ok
+160=punctuation:[)\].}]
+170=operator:[-+*%<>~^/@]
+
+[Rules.regex_ok]
+; after punctuation/operators: a '/' starts a regex literal
+eol_pop=true
+10=regex:\s*/(?![/*])(?:\\.|\[(?:\\.|[^\]\\])*\]|[^/\\\[])+/[a-z]*
+10.pop=true
+20=comment:\s*//.*
+20.pop=true
+30=default:(?=.)
+30.pop=true
+
+[Rules.decl_name]
+; the name after "function" / "class"
+eol_pop=true
+10=default:\s+
+20=function:[A-Za-z_$][\w$]*
+20.pop=true
+30=default:(?=.)
+30.pop=true
+
+[Rules.block_comment]
+default=comment
+10=comment:\*/
+10.pop=true
+20=comment:[^*]+
+
+[Rules.sq_string]
+default=string
+eol_pop=true
+10=string_escape:\\(?:x[0-9a-fA-F]{2}|u\{[0-9a-fA-F]+\}|u[0-9a-fA-F]{4}|.)
+20=string:[^'\\]+
+30=string:'
+30.pop=true
+
+[Rules.dq_string]
+default=string
+eol_pop=true
+10=string_escape:\\(?:x[0-9a-fA-F]{2}|u\{[0-9a-fA-F]+\}|u[0-9a-fA-F]{4}|.)
+20=string:[^"\\]+
+30=string:"
+30.pop=true
+
+[Rules.template]
+default=template
+10=string_escape:\\(?:x[0-9a-fA-F]{2}|u\{[0-9a-fA-F]+\}|u[0-9a-fA-F]{4}|.)
+20=template:\$\{
+20.push=template_expr
+30=template:`
+30.pop=true
+40=template:[^`\\$]+
+
+[Rules.template_expr]
+; code inside ${...}; nested templates are supported, nested braces are not
+10=template:\}
+10.pop=true
+20=comment:/\*
+20.push=block_comment
+30=string:'
+30.push=sq_string
+40=string:"
+40.push=dq_string
+50=template:`
+50.push=template
+60=number:\b\d[\d_]*(?:\.[\d_]*)?(?:[eE][+-]?\d+)?n?\b
+70=keyword:\b(?:new|typeof|this|await|in|of|instanceof)\b
+80=constant:\b(?:true|false|null|undefined)\b
+90=function:[A-Za-z_$][\w$]*(?=\s*\()
+100=identifier:[A-Za-z_$][\w$]*
+110=punctuation:[()\[\],;.{]
+120=operator:[-+*/%=<>!&|?:~^]+

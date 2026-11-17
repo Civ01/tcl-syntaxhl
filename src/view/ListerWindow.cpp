@@ -153,7 +153,10 @@ bool ListerWindow::load(const std::wstring& file, int showFlags) {
     if (lang ? !cfg_.italicCommentsFor(*lang) : !cfg_.italicComments) theme_.disableCommentItalic();
     font_.face = win::widen(cfg_.fontFace);
     font_.pointSize = cfg_.fontSize;
-    font_.tabTwips = measureCharTwips(edit_, font_) * cfg_.tabWidth;
+    font_.tabTwips = measureCharTwips(edit_, font_) * (lang ? cfg_.tabWidthFor(*lang) : cfg_.tabWidth);
+    // RichEdit beeps when navigation hits the start/end of the text (PgDn at
+    // the end, ...). Lister itself is silent, so beeps are off unless enabled.
+    SendMessageW(edit_, EM_SETEDITSTYLE, cfg_.allowBeeps ? SES_ALLOWBEEPS : 0, SES_ALLOWBEEPS);
 
     std::vector<std::wstring> notices;
     if (!lexer_) mode_ = RenderMode::Plain;
@@ -527,7 +530,9 @@ LRESULT ListerWindow::handleEditMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
                     return 0;
             }
             // Everything else (Esc, N/P, F-keys, digits...) belongs to Lister.
-            PostMessageW(lister_, msg, wp, lp);
+            // Lister subclasses the plugin window (our container) to catch its
+            // hotkeys (TC docs, ListLoad remarks), so keys go there.
+            PostMessageW(hwnd_, msg, wp, lp);
             handled = true;
             return 0;
         }
@@ -536,13 +541,16 @@ LRESULT ListerWindow::handleEditMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
                 bool nav = wp == VK_UP || wp == VK_DOWN || wp == VK_LEFT || wp == VK_RIGHT || wp == VK_PRIOR ||
                            wp == VK_NEXT || wp == VK_HOME || wp == VK_END;
                 if (!nav && !(GetKeyState(VK_CONTROL) < 0)) {
-                    PostMessageW(lister_, msg, wp, lp);
+                    PostMessageW(hwnd_, msg, wp, lp);
                     handled = true;
                 }
             }
             return 0;
         case WM_CHAR:
-            handled = true;  // read-only view: swallow typed characters (no beeps)
+            // Swallowed: the WM_KEYDOWN forwarded above is posted, so the message
+            // loop's TranslateMessage creates the matching WM_CHAR ('n', 'p', ...)
+            // for the plugin window. Forwarding chars as well would double them.
+            handled = true;
             return 0;
         case WM_MOUSEWHEEL:
         case WM_VSCROLL:

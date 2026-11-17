@@ -104,6 +104,11 @@ Config Config::fromIni(const IniDocument& ini) {
     }
     if (auto v = ini.get(G, "enable_config_dialog")) c.enableConfigDialog = parseBool(*v, false);
     if (auto v = ini.get(G, "italic_comments")) c.italicComments = parseBool(*v, true);
+    if (auto v = ini.get(G, "allow_beeps")) c.allowBeeps = parseBool(*v, false);
+    if (auto v = ini.get(G, "tab_width")) {
+        int n = std::atoi(v->c_str());
+        if (n >= 1 && n <= 32) c.tabWidth = n;
+    }
 
     if (ini.hasSection("Languages")) {
         c.languages.clear();
@@ -134,6 +139,8 @@ void Config::writeGeneral(IniDocument& ini) const {
     ini.set(G, "font_size", std::to_string(fontSize));
     ini.set(G, "enable_config_dialog", enableConfigDialog ? "true" : "false");
     ini.set(G, "italic_comments", italicComments ? "true" : "false");
+    ini.set(G, "tab_width", std::to_string(tabWidth));
+    ini.set(G, "allow_beeps", allowBeeps ? "true" : "false");
 }
 
 const LanguageDef* Config::languageForExtension(std::string_view ext) const {
@@ -157,6 +164,12 @@ TokenizerKind Config::tokenizerFor(const LanguageDef& lang) const {
 
 bool Config::italicCommentsFor(const LanguageDef& lang) const {
     return lang.options.getBool("italic_comments", italicComments);
+}
+
+int Config::tabWidthFor(const LanguageDef& lang) const {
+    auto v = lang.options.get("tab_width");
+    int n = v.empty() ? 0 : std::atoi(v.c_str());
+    return n >= 1 && n <= 32 ? n : tabWidth;
 }
 
 std::string Config::themeSet(bool darkMode) const {

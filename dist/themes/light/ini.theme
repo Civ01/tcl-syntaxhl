@@ -10,6 +10,22 @@
 ;   section=#800000,,normal    -> not bold
 ;   section=#800000            -> keeps the inherited style (bold)
 [Tokens]
+; Every class the INI lexers (native and rules/ini.rules) use:
+; ; ... and # ... lines
+comment=#008000,,italic
+; name inside [ ]
+section=#800000,,bold
+; the [ and ] (remove the line to use punctuation; "@section" = same as the name)
+section_bracket=#000000
+; name before = or :
 key=#0000FF
+; the = or :
+operator=#000000
+; plain values
 value=#A31515
+; "quoted" / 'quoted' parts of values
+string=#A31515
+; whole-value numbers: 10, -0.5, 1e3
+number=#098658
+; true/false/yes/no/on/off
 constant=#AF00DB

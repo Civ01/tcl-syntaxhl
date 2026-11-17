@@ -80,6 +80,14 @@ void pump(int ms) {
     }
 }
 
+// Simulates Lister subclassing the plugin window to catch hotkeys.
+std::vector<std::pair<UINT, WPARAM>> g_pluginKeys;
+WNDPROC g_pluginOrigProc = nullptr;
+LRESULT CALLBACK listerSubclass(HWND h, UINT m, WPARAM w, LPARAM l) {
+    if (m == WM_KEYDOWN || m == WM_CHAR) g_pluginKeys.emplace_back(m, w);
+    return CallWindowProcW(g_pluginOrigProc, h, m, w, l);
+}
+
 LRESULT CALLBACK hostProc(HWND h, UINT m, WPARAM w, LPARAM l) {
     if (m == WM_COMMAND && HIWORD(w) == itm_percent) {
         g_lastPercent = LOWORD(w);
@@ -410,6 +418,49 @@ int wmain(int argc, wchar_t** argv) {
         close(h);
     }
 
+    section("keyboard / beeps / tab width");
+    {
+        HWND h = open(g_samples / "sample.ini");
+        HWND edit = findChild(h, MSFTEDIT_CLASS);
+        g_pluginOrigProc = reinterpret_cast<WNDPROC>(
+            SetWindowLongPtrW(h, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&listerSubclass)));
+        g_pluginKeys.clear();
+        SendMessageW(edit, WM_KEYDOWN, 'N', 0x00310001);
+        SendMessageW(edit, WM_CHAR, 'n', 0x00310001);
+        SendMessageW(edit, WM_KEYDOWN, VK_ESCAPE, 0x00010001);
+        SendMessageW(edit, WM_KEYDOWN, VK_NEXT, 0x01510001);  // navigation stays in the view
+        pump(100);
+        auto count = [](UINT m, WPARAM w) {
+            int n = 0;
+            for (auto& k : g_pluginKeys) n += (k.first == m && k.second == w);
+            return n;
+        };
+        check(count(WM_KEYDOWN, 'N') == 1, "N keydown reaches the plugin window once");
+        check(count(WM_CHAR, 'n') == 1, "'n' char reaches the plugin window once");
+        check(count(WM_KEYDOWN, VK_ESCAPE) == 1, "Esc reaches the plugin window once");
+        check(count(WM_KEYDOWN, VK_NEXT) == 0, "PgDn is handled by the view");
+        LRESULT style = SendMessageW(edit, EM_GETEDITSTYLE, 0, 0);
+        check((style & SES_ALLOWBEEPS) == 0, "RichEdit beeps disabled by default");
+        SetWindowLongPtrW(h, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(g_pluginOrigProc));
+        close(h);
+
+        auto tabX = [&](const char* width) {
+            IniOverride ov([&](IniDocument& d) { d.set("General", "tab_width", width); });
+            auto p = g_tmp / "tab.ini";
+            writeFile(p, "\tX=1\n");
+            HWND t = open(p);
+            HWND ed = findChild(t, MSFTEDIT_CLASS);
+            POINTL a{}, b{};
+            SendMessageW(ed, EM_POSFROMCHAR, reinterpret_cast<WPARAM>(&a), 0);
+            SendMessageW(ed, EM_POSFROMCHAR, reinterpret_cast<WPARAM>(&b), 1);
+            close(t);
+            return b.x - a.x;
+        };
+        long w4 = tabX("4"), w8 = tabX("8");
+        check(w4 > 0 && w8 > w4 * 3 / 2 && w8 < w4 * 5 / 2,
+              "tab_width 8 is about twice tab_width 4 (" + std::to_string(w4) + " / " + std::to_string(w8) + " px)");
+    }
+
     section("ListLoadNext");
     {
         HWND h = open(g_samples / "sample.json");
@@ -549,13 +600,14 @@ int wmain(int argc, wchar_t** argv) {
             check(info && !IsWindowVisible(info), "no notice for json");
             close(h);
         }
-        h = open(g_samples / "sample.ini");
-        check(h != nullptr, "load ini with regex tokenizer");
-        if (h) {
-            check(compareColors(findChild(h, MSFTEDIT_CLASS), expectedFor(g_samples / "sample.ini", false)) == 0,
-                  "ini regex colors");
+        for (const char* n : {"sample.ini", "sample.css", "sample.js"}) {
+            h = open(g_samples / n);
+            check(h != nullptr, std::string("load with regex tokenizer: ") + n);
+            if (!h) continue;
+            check(compareColors(findChild(h, MSFTEDIT_CLASS), expectedFor(g_samples / n, false)) == 0,
+                  std::string("regex colors: ") + n);
             HWND info = findChild(h, L"TclSyntaxHL_InfoBar");
-            check(info && !IsWindowVisible(info), "no notice for ini");
+            check(info && !IsWindowVisible(info), std::string("no notice: ") + n);
             close(h);
         }
         h = open(g_samples / "sample.py");

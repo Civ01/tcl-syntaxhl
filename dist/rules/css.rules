@@ -1,0 +1,99 @@
+; CSS rules for the regex tokenizer (tokenizer=regex).
+; Simpler than the native lexer: no SCSS/LESS support; inside a block a
+; statement followed by '{' on the same line is a nested selector.
+; Format: see json.rules / README.md.
+
+[Meta]
+name=CSS (regex)
+
+[Rules]
+; selector context (top level, @media blocks)
+10=comment:/\*
+10.push=block_comment
+20=at_rule:@[\w-]+
+20.push=prelude
+30=string:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'
+40=selector:[.#][\w-]+|[A-Za-z_][\w-]*|\*|&
+50=keyword:::?[\w-]+
+60=punctuation:\[
+60.push=attribute
+70=punctuation:\{
+70.push=block
+80=punctuation:[}()]
+90=number:\d+(?:\.\d+)?%?
+100=operator:[,>+~]
+
+[Rules.prelude]
+; after @media / @import / @font-face ... up to '{' or ';'
+10=comment:/\*
+10.push=block_comment
+20=punctuation:\{
+20.pop=true
+20.push=block
+30=punctuation:;
+30.pop=true
+40=string:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'
+50=function:url(?=\()
+60=keyword:\b(?:and|or|not|only)\b
+70=property:[\w-]+(?=\s*:)
+80=number:-?(?:\d+(?:\.\d+)?|\.\d+)(?:%|[A-Za-z]+)?
+90=function:[\w-]+(?=\()
+100=value:[\w-]+
+110=punctuation:[():,]
+
+[Rules.block]
+; declarations: property: value;  (nested rules: "selector {")
+10=comment:/\*
+10.push=block_comment
+20=punctuation:\}
+20.pop=true
+30=selector:[^{};/]+(?=\{)
+40=punctuation:\{
+40.push=block
+50=at_rule:@[\w-]+
+50.push=prelude
+60=property:\*?-{0,2}[A-Za-z_][\w-]*(?=\s*:)
+70=punctuation::
+70.push=value
+80=punctuation:;
+
+[Rules.value]
+; property value up to ';' (or the closing '}' of the block)
+10=comment:/\*
+10.push=block_comment
+20=punctuation:;
+20.pop=true
+30=default:(?=\})
+30.pop=true
+40=keyword:!\s*important\b
+50=number:#[0-9a-fA-F]{3,8}\b
+60=string:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'
+70=function:url(?=\()
+70.push=url
+80=number:[-+]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][-+]?\d+)?(?:%|[A-Za-z]+)?
+90=function:[\w-]+(?=\()
+100=value:-{0,2}[A-Za-z_][\w-]*
+110=punctuation:[()]
+120=operator:[,/*+=-]
+
+[Rules.url]
+; url(...) with an unquoted address
+10=punctuation:\(
+20=string:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'
+30=punctuation:\)
+30.pop=true
+40=string:[^)"']+
+
+[Rules.attribute]
+eol_pop=true
+10=punctuation:\]
+10.pop=true
+20=string:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'
+30=key:[\w-]+
+40=operator:[~|^$*]?=
+
+[Rules.block_comment]
+default=comment
+10=comment:\*/
+10.pop=true
+20=comment:[^*]+

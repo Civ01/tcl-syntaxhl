@@ -49,7 +49,8 @@ struct Config {
     std::string themeDark = "dark";
     std::string fontFace = "Consolas";
     int fontSize = 10;
-    int tabWidth = 4;  // fixed in v1 (not read from the INI)
+    int tabWidth = 4;            // columns per tab stop (display only)
+    bool allowBeeps = false;     // RichEdit beeps (e.g. PgDn at the end of the file)
     bool enableConfigDialog = false;
     bool italicComments = true;  // false: never draw comments in italic
     std::vector<LanguageDef> languages;
@@ -64,6 +65,8 @@ struct Config {
     TokenizerKind tokenizerFor(const LanguageDef& lang) const;
     // [General] italic_comments, overridable per language ([INI] italic_comments=...).
     bool italicCommentsFor(const LanguageDef& lang) const;
+    // [General] tab_width, overridable per language. Clamped to 1..32.
+    int tabWidthFor(const LanguageDef& lang) const;
     std::string themeSet(bool darkMode) const;
 
     // EXT="JSON" | EXT="PY" ... for languages accepted by `available`,

@@ -52,6 +52,8 @@ theme_dark=dark
 font_face=Consolas
 font_size=10
 italic_comments=true      ; false: never italic (also per language: [INI] italic_comments=false)
+tab_width=4               ; columns per tab character (display only; per language too)
+allow_beeps=false         ; RichEdit beeps at the start/end of the file (Lister is silent)
 
 [Languages]               ; LanguageName=extensions
 JSON=json
@@ -143,8 +145,10 @@ INI section headers are colored in two parts: `section` is the name, and
 With `tokenizer=regex` (globally, or per language as `[JSON] tokenizer=regex`), a
 language is tokenized by `rules\<language>.rules`. Languages without a rules file
 fall back to the native lexer, and a notice explains this. A language with a rules
-file but no native lexer works too. `json.rules` and `ini.rules` ship and double as
-references for the format:
+file but no native lexer works too. `json.rules`, `ini.rules`, `css.rules` and
+`js.rules` ship and double as references for the format. They are deliberately
+simpler than the native lexers: no SCSS/LESS, and in JS a `/` starts a regex only
+after punctuation or at the start of a line.
 
 ```ini
 [Rules]                    ; initial state
