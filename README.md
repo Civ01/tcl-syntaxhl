@@ -9,8 +9,10 @@ lexer or with a `.rules` file. See [specs.md](specs.md) for the full specificati
 
 ## Installation
 
-1. Download `tcl-syntaxhl-x64` from the latest CI run (GitHub → Actions → CI →
-   artifacts), or build it yourself (see below).
+1. Download `tcl-syntaxhl-<version>-x64.zip` from
+   [Releases](https://github.com/Civ01/tcl-syntaxhl/releases). Builds of every
+   commit are attached to each CI run as an artifact (GitHub → Actions → CI). You
+   can also build it yourself (see below).
 2. Open the zip in Total Commander (x64). TC detects `pluginst.inf` and offers to
    install the plugin. Alternatively, copy the folder anywhere and add
    `tcl-syntaxhl.wlx64` under *Configuration → Options → Plugins → Lister (WLX)*.
@@ -29,7 +31,11 @@ Requirements: Windows 10 or later, Total Commander x64. Dark-mode following need
 | Lister "Wrap text" option | Word wrap on/off |
 | Right click | Context menu (Copy, Select all, Go to line) |
 
-Other keys (Esc, N/P, 1–7, …) are passed on to Lister.
+Other keys (Esc, N/P, 1–7, …) are passed on to Lister. Find-first starts at the
+first displayed line, as the TC plugin documentation specifies.
+
+If you choose *Image/Multimedia* from Lister's menu (`lcp_forceshow`), files with
+extensions the plugin doesn't know are shown as plain text instead of being refused.
 
 ## Configuration: `tcl-syntaxhl.ini`
 
@@ -38,13 +44,14 @@ The INI file is fully commented. The important settings are:
 ```ini
 [General]
 tokenizer=native          ; native | regex
-max_highlight_size=5M     ; larger files are not fully highlighted
+max_highlight_size=2M     ; larger files are not fully highlighted
 use_lazy_highlight=false  ; true: highlight only the visible part of large files
 theme=auto                ; auto (follow TC dark mode) or a folder under themes\
 theme_light=light
 theme_dark=dark
 font_face=Consolas
 font_size=10
+italic_comments=true      ; false: never italic (also per language: [INI] italic_comments=false)
 
 [Languages]               ; LanguageName=extensions
 JSON=json
@@ -102,28 +109,42 @@ infobar_background=#FFF4CE
 infobar_foreground=#000000
 
 [Tokens]
-; class=foreground[,background][,flags]   flags: bold, italic, underline (combine with +)
+; class=foreground[,background][,flags]   flags: bold, italic, underline (combine with +), normal
 keyword=#0000FF
 comment=#008000,,italic
 error=#FF0000,#FFE0E0,underline
+section=#800000,,normal       ; flags given -> they replace the inherited ones (not bold)
+section_bracket=@section      ; "@class": look exactly like another class
 ```
 
-Missing entries fall back first to `default.theme` and then to the built-in palette.
+How values are resolved:
+
+- **Empty or omitted fields keep the inherited value.** `section=#FF0000` changes
+  only the color and stays bold; `section=#FF0000,,normal` also removes the bold.
+- **Missing entries** fall back to `default.theme`, then to the built-in palette.
+  Some classes have a parent and use the parent's style unless a theme sets them:
+  `section_bracket` uses `punctuation`.
+- **Unknown class names are ignored.**
+- **`italic_comments=false`** in `tcl-syntaxhl.ini` removes italic from comments,
+  whatever the theme says. It can also be set per language.
+
+INI section headers are colored in two parts: `section` is the name, and
+`section_bracket` is the `[` and `]`.
 
 ### Token classes
 
 `default`, `keyword`, `builtin`, `constant`, `identifier`, `function`, `type`, `decorator`,
 `number`, `string`, `string_escape`, `comment`, `operator`, `punctuation`, `key`,
 `section`, `value`, `selector`, `property`, `at_rule`, `variable`, `regex`,
-`template`, `error`.
+`template`, `error`, `section_bracket`.
 
 ## Regex tokenizer (`.rules` files)
 
 With `tokenizer=regex` (globally, or per language as `[JSON] tokenizer=regex`), a
 language is tokenized by `rules\<language>.rules`. Languages without a rules file
 fall back to the native lexer, and a notice explains this. A language with a rules
-file but no native lexer works too. Only `json.rules` ships for now; it doubles as a
-reference for the format:
+file but no native lexer works too. `json.rules` and `ini.rules` ship and double as
+references for the format:
 
 ```ini
 [Rules]                    ; initial state
@@ -135,9 +156,13 @@ reference for the format:
 default=comment            ; class for unmatched characters
 10=comment:\*/
 10.pop=true                ; back to the previous state
+; eol_pop=true             ; (optional) the state ends with the line
 ```
 
-The regexes use ECMAScript syntax (`std::regex`) and match within one line.
+The regexes use ECMAScript syntax (`std::regex`) and match within one line, so `^`
+matches only at the start of a line and `$` only at its end. The rules engine
+doesn't see INI options such as `support_jsonc_comments`, so `json.rules` always
+colors comments as comments.
 
 ## Building
 
@@ -157,6 +182,19 @@ cmake --build build --config Release --target package_zip
   && cmake --build build && ctest --test-dir build` builds and tests only the core.
 - To cross-compile the plugin with MinGW, add
   `-DCMAKE_TOOLCHAIN_FILE=cmake/mingw-w64-x86_64.cmake`.
+
+### Releases
+
+Push a version tag to publish a release, for example:
+
+```
+git tag v0.2.0 && git push origin v0.2.0
+```
+
+The `Release` workflow builds and tests the plugin with MSVC, takes the version
+from the tag (it goes into the DLL's version resource and the zip name), and
+publishes `tcl-syntaxhl-0.2.0-x64.zip`. Tags with a suffix, such as
+`v0.2.0-beta1`, become pre-releases.
 
 ### Tests
 

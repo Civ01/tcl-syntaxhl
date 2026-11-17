@@ -1,4 +1,15 @@
-; INI overrides for the light theme.
+; INI overrides for the light theme (only differences from default.theme).
+;
+; Section headers are colored in two parts:
+;   section          the name between the brackets (bold by default)
+;   section_bracket  the [ and ] themselves; when not set, they use the
+;                    "punctuation" color (black). Examples:
+;                      section_bracket=#808080      gray brackets
+;                      section_bracket=@section     same look as the section name
+; Style flags are the 3rd field and replace the inherited ones:
+;   section=#800000,,normal    -> not bold
+;   section=#800000            -> keeps the inherited style (bold)
 [Tokens]
 key=#0000FF
 value=#A31515
+constant=#AF00DB

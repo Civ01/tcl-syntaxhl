@@ -103,6 +103,7 @@ Config Config::fromIni(const IniDocument& ini) {
         if (n >= 4 && n <= 96) c.fontSize = n;
     }
     if (auto v = ini.get(G, "enable_config_dialog")) c.enableConfigDialog = parseBool(*v, false);
+    if (auto v = ini.get(G, "italic_comments")) c.italicComments = parseBool(*v, true);
 
     if (ini.hasSection("Languages")) {
         c.languages.clear();
@@ -132,6 +133,7 @@ void Config::writeGeneral(IniDocument& ini) const {
     ini.set(G, "font_face", fontFace);
     ini.set(G, "font_size", std::to_string(fontSize));
     ini.set(G, "enable_config_dialog", enableConfigDialog ? "true" : "false");
+    ini.set(G, "italic_comments", italicComments ? "true" : "false");
 }
 
 const LanguageDef* Config::languageForExtension(std::string_view ext) const {
@@ -151,6 +153,10 @@ const LanguageDef* Config::languageForFile(const std::filesystem::path& file) co
 
 TokenizerKind Config::tokenizerFor(const LanguageDef& lang) const {
     return lang.tokenizer ? *lang.tokenizer : tokenizer;
+}
+
+bool Config::italicCommentsFor(const LanguageDef& lang) const {
+    return lang.options.getBool("italic_comments", italicComments);
 }
 
 std::string Config::themeSet(bool darkMode) const {

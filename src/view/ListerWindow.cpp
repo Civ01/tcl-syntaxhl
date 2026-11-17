@@ -115,9 +115,15 @@ bool ListerWindow::load(const std::wstring& file, int showFlags) {
     IniDocument doc;
     cfg = IniDocument::loadFile(ini, doc, ansi) ? Config::fromIni(doc) : Config::defaults();
     const LanguageDef* lang = cfg.languageForFile(fs::path(file));
-    if (!lang) return false;
-    auto sel = selectLexer(cfg, *lang, dir, ansi);
-    if (!sel.lexer) return false;
+    // lcp_forceshow: the user explicitly chose this plugin ("Image/Multimedia"),
+    // so unknown files are shown as plain text instead of being refused.
+    const bool forced = (showFlags & lcp_forceshow) != 0;
+    if (!lang && !forced) return false;
+    LexerSelection sel;
+    if (lang) {
+        sel = selectLexer(cfg, *lang, dir, ansi);
+        if (!sel.lexer && !forced) return false;
+    }
     std::string bytes;
     uint64_t size = 0;
     if (!win::readFile(file, bytes, size)) return false;
@@ -132,7 +138,7 @@ bool ListerWindow::load(const std::wstring& file, int showFlags) {
     showFlags_ = showFlags;
     cfg_ = std::move(cfg);
     lang = cfg_.languageForFile(fs::path(file));
-    lexer_ = std::move(sel.lexer);
+    lexer_ = std::move(sel.lexer);  // may be null (forced plain view)
     text_ = normalizeLineEndings(decoded.text);
     decoded.text.clear();
     decoded.text.shrink_to_fit();
@@ -143,13 +149,15 @@ bool ListerWindow::load(const std::wstring& file, int showFlags) {
         if (text_[i] == u'\r' && i + 1 < text_.size()) lineStarts_.push_back(static_cast<uint32_t>(i + 1));
 
     dark_ = (showFlags & lcp_darkmode) != 0;
-    theme_ = loadTheme(dir, cfg_.themeSet(dark_), lang->id, dark_, ansi);
+    theme_ = loadTheme(dir, cfg_.themeSet(dark_), lang ? lang->id : std::string(), dark_, ansi);
+    if (lang ? !cfg_.italicCommentsFor(*lang) : !cfg_.italicComments) theme_.disableCommentItalic();
     font_.face = win::widen(cfg_.fontFace);
     font_.pointSize = cfg_.fontSize;
     font_.tabTwips = measureCharTwips(edit_, font_) * cfg_.tabWidth;
 
     std::vector<std::wstring> notices;
-    if (size <= cfg_.maxHighlightSize) mode_ = RenderMode::Full;
+    if (!lexer_) mode_ = RenderMode::Plain;
+    else if (size <= cfg_.maxHighlightSize) mode_ = RenderMode::Full;
     else if (cfg_.useLazyHighlight) mode_ = RenderMode::Lazy;
     else {
         mode_ = RenderMode::Plain;
@@ -173,7 +181,7 @@ bool ListerWindow::load(const std::wstring& file, int showFlags) {
     SendMessageW(edit_, WM_SETREDRAW, FALSE, 0);
     SendMessageW(edit_, EM_SETBKGNDCOLOR, 0, static_cast<LPARAM>(win::toColorRef(theme_.background)));
     SendMessageW(edit_, EM_SETZOOM, 0, 0);
-    if (mode_ == RenderMode::Full) {
+    if (mode_ == RenderMode::Full && lexer_) {
         std::vector<Token> tokens;
         LexState st;
         lexer_->lex(text_, st, tokens);
@@ -190,7 +198,7 @@ bool ListerWindow::load(const std::wstring& file, int showFlags) {
     SetWindowTheme(edit_, dark_ ? L"DarkMode_Explorer" : L"Explorer", nullptr);
     InvalidateRect(edit_, nullptr, TRUE);
 
-    if (mode_ == RenderMode::Lazy) lazy_ = std::make_unique<LazyModel>(text_, *lexer_);
+    if (mode_ == RenderMode::Lazy && lexer_) lazy_ = std::make_unique<LazyModel>(text_, *lexer_);
     lastPercent_ = -1;
     lastTopCp_ = lastBottomCp_ = -1;
     viewChanged();
@@ -356,11 +364,18 @@ int ListerWindow::search(const std::wstring& text, int flags) {
     FINDTEXTEXW ft{};
     ft.lpstrText = text.c_str();
     LONG textLen = static_cast<LONG>(text_.size());
+    // lcs_findfirst: "search from the beginning of the first displayed line"
+    // (TC docs). Backwards, start at the end of the last displayed line so that
+    // visible matches are found too.
+    size_t topLine = lineOfOffset(static_cast<size_t>(std::max<LONG>(topCp(), 0)));
+    size_t bottomLine = lineOfOffset(static_cast<size_t>(std::max<LONG>(bottomCp(), 0)));
+    LONG firstShown = static_cast<LONG>(lineStarts_[topLine]);
+    LONG lastShownEnd = bottomLine + 1 < lineStarts_.size() ? static_cast<LONG>(lineStarts_[bottomLine + 1]) : textLen;
     if (backwards) {
-        ft.chrg.cpMin = first ? textLen : cur.cpMin;
+        ft.chrg.cpMin = first ? lastShownEnd : cur.cpMin;
         ft.chrg.cpMax = 0;
     } else {
-        ft.chrg.cpMin = first ? 0 : cur.cpMax;
+        ft.chrg.cpMin = first ? firstShown : cur.cpMax;
         ft.chrg.cpMax = -1;
     }
     WPARAM f = backwards ? 0 : FR_DOWN;
@@ -389,7 +404,7 @@ int ListerWindow::command(int cmd, int param) {
             bool dark = (param & lcp_darkmode) != 0;
             if (dark != dark_) {
                 int pct = lastPercent_;
-                if (!load(file_, param)) return LISTPLUGIN_ERROR;
+                if (!load(file_, param | (showFlags_ & lcp_forceshow))) return LISTPLUGIN_ERROR;
                 if (pct > 0) setPercent(pct);
             } else {
                 showFlags_ = param;

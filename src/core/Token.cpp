@@ -9,7 +9,7 @@ const char* const kNames[kTokenClassCount] = {
     "default",  "keyword",     "builtin",  "constant",    "identifier", "function",
     "type",     "decorator",   "number",   "string",      "string_escape", "comment",
     "operator", "punctuation", "key",      "section",     "value",      "selector",
-    "property", "at_rule",     "variable", "regex",       "template",   "error",
+    "property", "at_rule",     "variable", "regex",       "template",   "error",      "section_bracket",
 };
 }  // namespace
 

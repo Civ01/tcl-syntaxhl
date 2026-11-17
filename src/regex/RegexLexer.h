@@ -10,6 +10,7 @@
 //
 //   [Rules.block_comment]
 //   default=comment         ; class for text no rule matches
+//   eol_pop=false           ; true: the state ends at the end of the line
 //   10=comment:\*/
 //   10.pop=true             ; return to the previous state
 //

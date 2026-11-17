@@ -42,7 +42,7 @@ struct LanguageDef {
 
 struct Config {
     TokenizerKind tokenizer = TokenizerKind::Native;
-    uint64_t maxHighlightSize = 5ull * 1024 * 1024;
+    uint64_t maxHighlightSize = 2ull * 1024 * 1024;
     bool useLazyHighlight = false;
     std::string theme = "auto";
     std::string themeLight = "light";
@@ -51,6 +51,7 @@ struct Config {
     int fontSize = 10;
     int tabWidth = 4;  // fixed in v1 (not read from the INI)
     bool enableConfigDialog = false;
+    bool italicComments = true;  // false: never draw comments in italic
     std::vector<LanguageDef> languages;
 
     static Config defaults();
@@ -61,6 +62,8 @@ struct Config {
     const LanguageDef* languageForExtension(std::string_view ext) const;
     const LanguageDef* languageForFile(const std::filesystem::path& file) const;
     TokenizerKind tokenizerFor(const LanguageDef& lang) const;
+    // [General] italic_comments, overridable per language ([INI] italic_comments=...).
+    bool italicCommentsFor(const LanguageDef& lang) const;
     std::string themeSet(bool darkMode) const;
 
     // EXT="JSON" | EXT="PY" ... for languages accepted by `available`,

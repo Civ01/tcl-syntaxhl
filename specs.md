@@ -181,7 +181,7 @@ The file lives next to the DLL. Keys use `snake_case`. A missing file, section o
 ; native | regex  (regex currently ships only for JSON)
 tokenizer=native
 ; Files larger than this are not fully highlighted. Accepts bytes or K/M suffix.
-max_highlight_size=5M
+max_highlight_size=2M
 ; true  = files over the limit get lazy (visible-area) highlighting
 ; false = files over the limit are shown as plain text with an info bar notice
 use_lazy_highlight=false
@@ -191,6 +191,8 @@ theme_light=light
 theme_dark=dark
 font_face=Consolas
 font_size=10
+; false = never draw comments in italic; per-language override: [INI] italic_comments=...
+italic_comments=true
 ; reserved for the future config window
 enable_config_dialog=false
 
@@ -249,7 +251,8 @@ infobar_background=#FFF4CE
 infobar_foreground=#000000
 
 [Tokens]
-; class=foreground[,background][,flags]   flags: bold|italic|underline (combinable with +)
+; class=foreground[,background][,flags]   flags: bold|italic|underline (combinable with +), normal
+; class=@other   -> same look as another class (resolved after all files are loaded)
 keyword=#0000FF,,bold
 string=#A31515
 string_escape=#FF6A00
@@ -258,6 +261,10 @@ number=#098658
 key=#0451A5
 error=#FF0000,#FFE0E0
 ```
+
+- Flags, when given, replace the inherited ones; omitted or empty fields keep the inherited value.
+- Classes can have a parent class used when no theme file sets them. Currently `section_bracket` falls back to `punctuation`, so brackets default to black in the light theme.
+- `italic_comments=false` in the main INI (global, or per language section) strips italic from `comment` after the theme is resolved, for every tokenizer.
 
 Token class names are the lowercase `TokenClass` names. Unknown names are ignored, and an omitted class inherits from the next level.
 
@@ -277,7 +284,7 @@ v1 ships `light` and `dark` sets, each with `default.theme` and overrides where 
    - size ≤ `max_highlight_size`: **full** highlighting (§7.1).
    - Above the limit with `use_lazy_highlight=true`: **lazy** highlighting (§7.2).
    - Above the limit with `use_lazy_highlight=false`: **plain** text, with the info bar showing, for example:
-     `Syntax highlighting disabled: file is 12.4 MB, limit is 5 MB (max_highlight_size in tcl-syntaxhl.ini).`
+     `Syntax highlighting disabled: file is 12.4 MB, limit is 2 MB (max_highlight_size in tcl-syntaxhl.ini).`
 4. **Info bar:** a thin, non-scrolling strip above the RichEdit with a close (×) button. It is hidden unless there is a notice. Notices include: size-limit plain mode, regex rules fallback, and ANSI-fallback decoding (low priority, optional).
 
 ### 7.1 Full mode
@@ -338,7 +345,7 @@ The lexers handle basic, robust highlighting. They are not validators, apart fro
 - Numbers: decimal, hex/oct/bin, separators `_`, BigInt `n`, exponent.
 
 ### 8.5 INI
-- `[section]` is `Section`; `key` is `Key`; `=`/`:` is `Operator`; the value is `Value`, with quoted parts as `String` and numbers as `Number`.
+- `[` and `]` are `SectionBracket`, the name between them is `Section` (an unterminated `[name` ends at the end of the line); `key` is `Key`; `=`/`:` is `Operator`; the value is `Value`, with quoted parts as `String` and numbers as `Number`.
 - Full-line comments starting with `;` or `#` are `Comment`.
 
 ---
@@ -367,7 +374,9 @@ default=comment
 ```
 This syntax is final for v1 and documented in the README; `dist/rules/json.rules` is the reference.
 
-- **Shipped rules:** only `rules/json.rules` in v1. Malformed rules produce an info-bar notice and a native fallback.
+- **`eol_pop=true`** in a `[Rules.<state>]` section ends that state at the end of the line (used by `ini.rules` for unterminated section headers).
+- **Options:** rules files do not see language options (e.g. `support_jsonc_comments`), so `json.rules` always colors comments as comments.
+- **Shipped rules:** `rules/json.rules` and `rules/ini.rules` (the latter must match the native INI lexer character by character; a unit test enforces it). Malformed rules produce an info-bar notice and a native fallback.
 
 ---
 
@@ -386,7 +395,7 @@ This syntax is final for v1 and documented in the README; `dist/rules/json.rules
 | Scenario | Target |
 |---|---|
 | 100 KB file, full mode, native lexer | open in < 100 ms |
-| 5 MB file (default limit), full mode, native lexer | open in < 1.5 s |
+| 2 MB file (default limit), full mode, native lexer | open in < 1.5 s (measured on CI: 4.5 MB in 1.0–1.9 s) |
 | 100 MB file, lazy mode | first screen in < 500 ms; smooth scrolling |
 | 100 MB file, plain mode | limited only by RichEdit text load |
 
@@ -472,6 +481,10 @@ tests/
   - Painting is triggered by scroll, size and key events, plus a 100 ms timer.
   - Tokens of extremely long lines are applied only near the visible character window and kept pending, capped at 2M.
 - **Scrolling:** RichEdit scroll positions are 16-bit and wrap on tall documents. Percent reporting, `lc_setpercent`, go-to-line centering and the restore logic therefore use character positions and line numbers (`EM_CHARFROMPOS`, `EM_LINESCROLL`), never `EM_GETSCROLLPOS`/`EM_SETSCROLLPOS`.
+- **`lcp_forceshow`:** the user explicitly chose the plugin, so files with unmapped extensions are shown as plain text. The detect string deliberately does not include `FORCE`, so the plugin does not take over "Image/Multimedia" for every file.
+- **`lcs_findfirst`:** searches from the beginning of the first displayed line, as the TC docs specify; backwards, from the end of the last displayed line.
+- **Releases:** pushing a tag `vX.Y.Z[-label]` runs `.github/workflows/release.yml`. It builds with MSVC, runs the tests, stamps the version into the DLL resource and the zip name, and publishes a GitHub release (a pre-release when a label is present).
+- **Reference material:** the official `listplug.h`, the sample plugin and the help file (v2.1) were checked against this implementation. Constants and signatures match. `ListPrint`, `ListGetPreviewBitmap`, `ListSearchDialog` and `ListNotificationReceived` are intentionally not exported.
 - **Quick View:** detected when the parent window class is not `TLister`; the plugin does not take focus in that case.
 - **Encoding notice:** files decoded with the ANSI fallback show no notice. The spec marked it optional, and legacy INI files would trigger it constantly.
 - **Tests:** besides the unit tests, `tools/plugin_smoke` drives the real DLL in a fake `TLister` host. It verifies colors against the core lexers, search, commands, `ListLoadNext`, encodings, plain, lazy and regex modes, and language options. CI runs it on `windows-latest`.
@@ -480,9 +493,9 @@ tests/
 
 ## 17. Open questions / assumptions to confirm
 
-1. **v1 feature set:** Find, Copy/Select all and word wrap are included; printing is deferred. This was assumed because the question went unanswered.
+1. **v1 feature set:** Find, Copy/Select all and word wrap are included; printing is not needed (confirmed).
 2. **Tab width:** fixed at 4 columns, since no INI option was requested. An option can be added if needed.
-3. **Example plugins and the TC Lister SDK docs:** referenced in the project description but not present in the project. This spec relies on the standard `listplug.h` API and will be cross-checked once the docs are available.
+3. **Example plugins and the TC Lister SDK docs:** uploaded and checked (see §16).
 4. **`pluginst.inf`:** the package uses `file=tcl-syntaxhl.wlx` (TC x64 picks the `.wlx64`); this needs verification with a real TC install.
 5. **Regex `.rules` syntax and state support:** settled (§9).
 6. **INI key naming:** the interview example `support-jsonc_comment` was normalised to `support_jsonc_comments`, using snake_case consistently.

@@ -1,4 +1,5 @@
-// INI lexer: [section], key = value, full-line ';' / '#' comments.
+// INI lexer: [section] (brackets = section_bracket, name = section),
+// key = value, full-line ';' / '#' comments.
 #include "LineLexer.h"
 #include "Lexers.h"
 
@@ -18,7 +19,10 @@ protected:
         if (s[i] == u'[') {
             size_t close = s.find(u']', i);
             size_t end = close == std::u16string_view::npos ? n : close + 1;
-            em.add(i, end - i, TokenClass::Section);
+            em.add(i, 1, TokenClass::SectionBracket);
+            size_t nameEnd = close == std::u16string_view::npos ? n : close;
+            em.add(i + 1, nameEnd - (i + 1), TokenClass::Section);
+            if (close != std::u16string_view::npos) em.add(close, 1, TokenClass::SectionBracket);
             size_t r = skipSpaces(s, end);
             if (r < n && (s[r] == u';' || s[r] == u'#')) em.add(r, n - r, TokenClass::Comment);
             return;

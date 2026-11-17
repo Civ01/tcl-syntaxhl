@@ -1,8 +1,14 @@
 ; Light theme - base palette for all languages.
-; [Tokens] format: class=foreground[,background][,flags]
-;   colors: #RRGGBB (or #RGB); empty = inherit; background "none" = view background
-;   flags : bold, italic, underline (combine with +), or normal
-; Per-language files (python.theme, css.theme, ...) only need overrides.
+; [Tokens] format: class=foreground[,background][,flags]   or   class=@otherclass
+;   colors: #RRGGBB (or #RGB); empty field = keep the inherited value
+;   background: "none" = view background
+;   flags : bold, italic, underline (combine with +), or normal (= none).
+;           When given, flags REPLACE the inherited ones; when the field is
+;           omitted the inherited flags stay (e.g. "comment=#008000" stays italic).
+;   @otherclass: look exactly like another class (e.g. section_bracket=@section)
+; Unknown class names are ignored. Per-language files (python.theme, ini.theme,
+; ...) only need overrides. Italic comments can also be switched off globally
+; with italic_comments=false in tcl-syntaxhl.ini.
 
 [View]
 background=#FFFFFF

@@ -111,7 +111,16 @@ void Theme::apply(const IniDocument& doc, std::vector<std::string>* warnings) {
     for (auto& [k, v] : doc.entries("Tokens")) {
         TokenClass cls;
         if (!parseTokenClass(k, cls) || cls == TokenClass::Count) { warn("Tokens." + k); continue; }
-        Style& s = styles[static_cast<size_t>(cls)];
+        size_t ci = static_cast<size_t>(cls);
+        auto tv = trim(v);
+        if (!tv.empty() && tv[0] == '@') {
+            TokenClass target;
+            if (!parseTokenClass(tv.substr(1), target) || target == cls) { warn("Tokens." + k); continue; }
+            alias_[ci] = static_cast<int>(target) + 1;
+            explicit_[ci] = true;
+            continue;
+        }
+        Style& s = styles[ci];
         auto parts = std::vector<std::string>();
         {
             size_t pos = 0;
@@ -145,10 +154,41 @@ void Theme::apply(const IniDocument& doc, std::vector<std::string>* warnings) {
                 else ok = false;
             }
         }
-        if (ok) s = ns;
-        else warn("Tokens." + k);
+        if (ok) {
+            s = ns;
+            explicit_[ci] = true;
+            alias_[ci] = 0;
+        } else {
+            warn("Tokens." + k);
+        }
     }
     styles[static_cast<size_t>(TokenClass::Default)].fg = foreground;
+}
+
+TokenClass parentClass(TokenClass c) {
+    switch (c) {
+        case TokenClass::SectionBracket: return TokenClass::Punctuation;
+        default: return TokenClass::Count;
+    }
+}
+
+void Theme::finalize() {
+    Style resolved[kTokenClassCount];
+    bool done[kTokenClassCount] = {};
+    // Iterative resolution with a depth guard (aliases may chain or cycle).
+    for (size_t c = 0; c < kTokenClassCount; ++c) {
+        size_t cur = c;
+        for (int depth = 0; depth < 16; ++depth) {
+            if (alias_[cur]) { cur = static_cast<size_t>(alias_[cur] - 1); continue; }
+            TokenClass parent = parentClass(static_cast<TokenClass>(cur));
+            if (!explicit_[cur] && parent != TokenClass::Count) { cur = static_cast<size_t>(parent); continue; }
+            break;
+        }
+        resolved[c] = styles[cur];
+        done[c] = true;
+    }
+    for (size_t c = 0; c < kTokenClassCount; ++c)
+        if (done[c]) styles[c] = resolved[c];
 }
 
 Theme loadTheme(const std::filesystem::path& pluginDir, const std::string& set, const std::string& languageId,
@@ -162,6 +202,7 @@ Theme loadTheme(const std::filesystem::path& pluginDir, const std::string& set, 
         auto p = dir / utf8Path(name + ".theme");
         if (std::filesystem::exists(p, ec) && IniDocument::loadFile(p, doc, ansi)) t.apply(doc);
     }
+    t.finalize();
     return t;
 }
 

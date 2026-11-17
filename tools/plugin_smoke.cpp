@@ -135,6 +135,15 @@ void diag(HWND plugin, const char* when) {
                 (long long)SendMessageW(edit, EM_GETLINECOUNT, 0, 0), (long long)hasOle);
 }
 
+bool italicAt(HWND edit, LONG cp) {
+    CHARRANGE cr{cp, cp + 1};
+    SendMessageW(edit, EM_EXSETSEL, 0, reinterpret_cast<LPARAM>(&cr));
+    CHARFORMAT2W cf{};
+    cf.cbSize = sizeof cf;
+    SendMessageW(edit, EM_GETCHARFORMAT, SCF_SELECTION, reinterpret_cast<LPARAM>(&cf));
+    return (cf.dwEffects & CFE_ITALIC) != 0;
+}
+
 COLORREF ref(Color c) { return RGB((c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF); }
 
 struct Expected {
@@ -304,13 +313,23 @@ int wmain(int argc, wchar_t** argv) {
     section("samples (dark mode flag)");
     for (const char* n : {"sample.json", "sample.py"}) testSample(n, lcp_darkmode);
 
-    section("unsupported file");
+    section("unsupported file / lcp_forceshow");
     {
         auto txt = g_tmp / "plain.txt";
-        writeFile(txt, "hello");
+        writeFile(txt, "hello\r\nworld = 1 // not highlighted\r\n");
         HWND h = open(txt);
         check(h == nullptr, "ListLoadW returns NULL for .txt");
         close(h);
+        h = open(txt, lcp_forceshow);
+        check(h != nullptr, "lcp_forceshow: .txt is shown");
+        if (h) {
+            HWND edit = findChild(h, MSFTEDIT_CLASS);
+            check(trimTrailingCr(editText(edit)) == u"hello\rworld = 1 // not highlighted", "forced: text shown as is");
+            Theme t = loadTheme(g_pluginDir, "light", "", false);
+            check(colorAt(edit, 6) == ref(t.foreground), "forced: plain colors");
+            check(api.command(h, lc_newparams, lcp_wraptext) == LISTPLUGIN_OK, "forced: lc_newparams");
+            close(h);
+        }
     }
 
     section("search / select all / percent");
@@ -333,6 +352,11 @@ int wmain(int argc, wchar_t** argv) {
         check(sel().cpMin == static_cast<LONG>(first), "backwards returns to first match");
         std::wstring upper = L"RETURN";
         check(api.search(h, upper.data(), lcs_findfirst | lcs_matchcase) == LISTPLUGIN_ERROR, "match case");
+        {
+            // Restore a known caret for the next checks.
+            CHARRANGE z{0, 0};
+            SendMessageW(edit, EM_EXSETSEL, 0, reinterpret_cast<LPARAM>(&z));
+        }
         check(api.search(h, upper.data(), lcs_findfirst) == LISTPLUGIN_OK, "case-insensitive");
         std::wstring part = L"retur";
         check(api.search(h, part.data(), lcs_findfirst | lcs_wholewords) == LISTPLUGIN_ERROR, "whole words");
@@ -365,6 +389,22 @@ int wmain(int argc, wchar_t** argv) {
                                                               std::to_string(g_lastPercent) + ")");
         api.command(h, lc_setpercent, 0);
         pump(500);
+        {
+            // lcs_findfirst starts at the first displayed line, not at the file start.
+            api.command(h, lc_setpercent, 50);
+            pump(200);
+            HWND ed = findChild(h, MSFTEDIT_CLASS);
+            POINTL tl{0, 0};
+            auto top = static_cast<LONG>(SendMessageW(ed, EM_CHARFROMPOS, 0, reinterpret_cast<LPARAM>(&tl)));
+            std::wstring k = L"value 1";
+            check(api.search(h, k.data(), lcs_findfirst) == LISTPLUGIN_OK, "find first from middle");
+            CHARRANGE cr{};
+            SendMessageW(ed, EM_EXGETSEL, 0, reinterpret_cast<LPARAM>(&cr));
+            check(cr.cpMin >= top - 40, "find first starts at first displayed line (match " + std::to_string(cr.cpMin) +
+                                            ", top " + std::to_string(top) + ")");
+            api.command(h, lc_setpercent, 0);
+            pump(200);
+        }
         check(g_lastPercent == 0, "percent 0 after lc_setpercent 0 (got " + std::to_string(g_lastPercent) + ", before " +
                                       std::to_string(at100) + ")");
         close(h);
@@ -442,7 +482,7 @@ int wmain(int argc, wchar_t** argv) {
     section("timing (informational)");
     {
         std::string big = "[\n";
-        while (big.size() < 4500u * 1024) big += "  {\"id\": 12345, \"name\": \"item\", \"ok\": true, \"v\": [1, 2.5, null]},\n";
+        while (big.size() < 1900u * 1024) big += "  {\"id\": 12345, \"name\": \"item\", \"ok\": true, \"v\": [1, 2.5, null]},\n";
         big += "  {}\n]\n";
         auto p = g_tmp / "full.json";
         writeFile(p, big);
@@ -450,12 +490,12 @@ int wmain(int argc, wchar_t** argv) {
         std::wstring w = p.wstring();
         HWND h = api.load(g_host, w.data(), 0);
         DWORD t1 = GetTickCount();
-        check(h != nullptr, "load 4.5 MB json (full highlighting)");
-        std::printf("  4.5 MB JSON, full highlighting: %lu ms\n", static_cast<unsigned long>(t1 - t0));
+        check(h != nullptr, "load 1.9 MB json (full highlighting)");
+        std::printf("  1.9 MB JSON, full highlighting: %lu ms\n", static_cast<unsigned long>(t1 - t0));
         if (h) {
             auto e = expectedFor(p, false);
             check(compareColors(findChild(h, MSFTEDIT_CLASS), e, e.text.size() - 2000, SIZE_MAX) == 0,
-                  "end of 4.5 MB file highlighted");
+                  "end of 1.9 MB file highlighted");
         }
         close(h);
     }
@@ -509,6 +549,15 @@ int wmain(int argc, wchar_t** argv) {
             check(info && !IsWindowVisible(info), "no notice for json");
             close(h);
         }
+        h = open(g_samples / "sample.ini");
+        check(h != nullptr, "load ini with regex tokenizer");
+        if (h) {
+            check(compareColors(findChild(h, MSFTEDIT_CLASS), expectedFor(g_samples / "sample.ini", false)) == 0,
+                  "ini regex colors");
+            HWND info = findChild(h, L"TclSyntaxHL_InfoBar");
+            check(info && !IsWindowVisible(info), "no notice for ini");
+            close(h);
+        }
         h = open(g_samples / "sample.py");
         check(h != nullptr, "python falls back to native");
         if (h) {
@@ -517,6 +566,40 @@ int wmain(int argc, wchar_t** argv) {
             check(compareColors(findChild(h, MSFTEDIT_CLASS), expectedFor(g_samples / "sample.py", false)) == 0,
                   "native colors for python");
             close(h);
+        }
+    }
+
+    section("italic_comments");
+    {
+        auto py = g_samples / "sample.py";
+        auto e = expectedFor(py, false);
+        LONG commentPos = -1;
+        for (const auto& t : e.tokens)
+            if (t.cls == TokenClass::Comment) { commentPos = static_cast<LONG>(t.start); break; }
+        check(commentPos >= 0, "sample.py has a comment");
+        HWND h = open(py);
+        if (h) {
+            check(italicAt(findChild(h, MSFTEDIT_CLASS), commentPos), "comments italic by default");
+            close(h);
+        }
+        {
+            IniOverride ov([](IniDocument& d) { d.set("General", "italic_comments", "false"); });
+            h = open(py);
+            if (h) {
+                check(!italicAt(findChild(h, MSFTEDIT_CLASS), commentPos), "italic_comments=false");
+                close(h);
+            }
+        }
+        {
+            IniOverride ov([](IniDocument& d) {
+                d.set("General", "italic_comments", "false");
+                d.set("Python", "italic_comments", "true");
+            });
+            h = open(py);
+            if (h) {
+                check(italicAt(findChild(h, MSFTEDIT_CLASS), commentPos), "per-language override wins");
+                close(h);
+            }
         }
     }
 

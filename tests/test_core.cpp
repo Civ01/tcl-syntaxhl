@@ -53,7 +53,8 @@ TEST_CASE("ini: set preserves comments and appends") {
 TEST_CASE("config: defaults and parsing") {
     auto c = Config::defaults();
     CHECK(c.tokenizer == TokenizerKind::Native);
-    CHECK(c.maxHighlightSize == 5u * 1024 * 1024);
+    CHECK(c.maxHighlightSize == 2u * 1024 * 1024);
+    CHECK(c.italicComments);
     CHECK_FALSE(c.useLazyHighlight);
     REQUIRE(c.languageForExtension("PYW"));
     CHECK(c.languageForExtension("pyw")->id == "python");
@@ -79,6 +80,59 @@ TEST_CASE("config: defaults and parsing") {
     CHECK(j5->lexerId == "json");
     CHECK(j5->id == "json5");
     CHECK(cfg.tokenizerFor(*j5) == TokenizerKind::Native);
+}
+
+TEST_CASE("config: italic_comments global and per language") {
+    auto cfg = Config::fromIni(IniDocument::parse(std::string_view(
+        "[General]\nitalic_comments=false\n[INI]\nitalic_comments=true\n")));
+    CHECK_FALSE(cfg.italicComments);
+    CHECK(cfg.italicCommentsFor(*cfg.languageForExtension("ini")));
+    CHECK_FALSE(cfg.italicCommentsFor(*cfg.languageForExtension("json")));
+    auto def = Config::fromIni(IniDocument::parse(std::string_view("[JSON]\nitalic_comments=no\n")));
+    CHECK(def.italicCommentsFor(*def.languageForExtension("py")));
+    CHECK_FALSE(def.italicCommentsFor(*def.languageForExtension("json")));
+    Theme t = Theme::builtin(false);
+    CHECK((t.style(TokenClass::Comment).flags & kItalic) != 0);
+    t.disableCommentItalic();
+    CHECK((t.style(TokenClass::Comment).flags & kItalic) == 0);
+}
+
+TEST_CASE("theme: section_bracket inherits punctuation, @alias, flags") {
+    auto base = [] {
+        Theme t = Theme::builtin(false);
+        t.apply(IniDocument::parse(std::string_view("[Tokens]\npunctuation=#111111\nsection=#800000,,bold\n")));
+        return t;
+    };
+    {
+        Theme t = base();
+        t.finalize();
+        CHECK(t.style(TokenClass::SectionBracket).fg == 0x111111);  // follows punctuation
+    }
+    {
+        Theme t = base();
+        t.apply(IniDocument::parse(std::string_view("[Tokens]\nsection_bracket=@section\n")));
+        // A later file changes section: the alias follows.
+        t.apply(IniDocument::parse(std::string_view("[Tokens]\nsection=#00AA00,,normal\n")));
+        t.finalize();
+        CHECK(t.style(TokenClass::SectionBracket).fg == 0x00AA00);
+        CHECK(t.style(TokenClass::SectionBracket).flags == 0);
+        CHECK(t.style(TokenClass::Section).flags == 0);
+    }
+    {
+        Theme t = base();
+        t.apply(IniDocument::parse(std::string_view("[Tokens]\nsection_bracket=#808080\nsection=#123456\n")));
+        t.finalize();
+        CHECK(t.style(TokenClass::SectionBracket).fg == 0x808080);
+        CHECK(t.style(TokenClass::Section).flags == kBold);  // flags omitted: inherited
+    }
+    {
+        Theme t = base();
+        std::vector<std::string> warn;
+        t.apply(IniDocument::parse(std::string_view("[Tokens]\nkey=@nope\nvalue=@value\nstring=@key\nkey=@string\n")),
+                &warn);
+        t.finalize();  // cycle string<->key must not hang
+        CHECK(warn.size() == 2);
+    }
 }
 
 TEST_CASE("config: theme auto selection") {
@@ -178,6 +232,10 @@ TEST_CASE("theme: shipped sets resolve with per-language overrides") {
         auto py = loadTheme(kDist, set, "python", dark);
         CHECK(base.background == (dark ? 0x1E1E1E : 0xFFFFFF));
         CHECK(py.style(TokenClass::Decorator).fg != base.style(TokenClass::Decorator).fg);
+        auto ini = loadTheme(kDist, set, "ini", dark);
+        CHECK(ini.style(TokenClass::SectionBracket).fg == ini.style(TokenClass::Punctuation).fg);
+        CHECK(ini.style(TokenClass::Constant).fg != ini.style(TokenClass::Key).fg);
+        CHECK(ini.style(TokenClass::Value).fg != ini.style(TokenClass::Key).fg);
         // Every shipped theme file must parse without warnings.
         for (auto& entry : fs::directory_iterator(kDist / "themes" / set)) {
             IniDocument doc;
@@ -199,6 +257,7 @@ TEST_CASE("shipped ini parses and matches defaults") {
     CHECK(cfg.tokenizer == def.tokenizer);
     CHECK(cfg.maxHighlightSize == def.maxHighlightSize);
     CHECK(cfg.useLazyHighlight == def.useLazyHighlight);
+    CHECK(cfg.italicComments == def.italicComments);
     CHECK(cfg.theme == def.theme);
     CHECK(cfg.fontFace == def.fontFace);
     CHECK(cfg.fontSize == def.fontSize);

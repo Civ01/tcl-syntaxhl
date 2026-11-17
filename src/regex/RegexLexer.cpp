@@ -34,6 +34,7 @@ struct Rule {
 struct State {
     std::string name;
     TokenClass defaultCls = TokenClass::Default;
+    bool popAtEol = false;  // eol_pop=true: state ends with the line
     std::vector<Rule> rules;
 };
 
@@ -70,6 +71,14 @@ protected:
                 ++pos;
                 zeroSteps = 0;
             }
+        }
+    }
+
+    void endOfLine(LexState& st) override {
+        for (int guard = 0; guard < 16; ++guard) {
+            const State& s = states_[std::min<size_t>(st.mode, states_.size() - 1)];
+            if (!s.popAtEol || (st.mode == 0 && st.depth == 0)) break;
+            pop(st);
         }
     }
 
@@ -127,6 +136,14 @@ RulesParseResult parseRules(const IniDocument& doc) {
     for (size_t si = 0; si < states.size(); ++si) {
         std::map<int, Rule> rules;
         for (const auto& [key, value] : doc.entries(sectionNames[si])) {
+            if (iequals(key, "eol_pop")) {
+                if (si == 0) {
+                    res.error = "[Rules] eol_pop is only valid in [Rules.<state>] sections";
+                    return res;
+                }
+                states[si].popAtEol = parseBool(value, false);
+                continue;
+            }
             if (iequals(key, "default")) {
                 if (!parseTokenClass(value, states[si].defaultCls)) {
                     res.error = "[" + sectionNames[si] + "] unknown class '" + value + "'";

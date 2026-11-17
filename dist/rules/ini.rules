@@ -1,0 +1,31 @@
+; INI rules for the regex tokenizer (tokenizer=regex). Mirrors the native INI lexer.
+; Format: see json.rules / README.md. '^' only matches at the start of a line.
+
+[Meta]
+name=INI (regex)
+
+[Rules]
+; full-line comments
+10=comment:^\s*[;#].*
+; [section]: opening bracket, then the section state colors name + closing bracket
+20=section_bracket:^\s*\[
+20.push=section
+; key (up to the first '=' or ':', trailing blanks excluded)
+30=key:^\s*[^=:\s\[;#][^=:]*?(?=\s*[=:])
+40=operator:\s*[=:]
+; whole-value literals
+50=number:\s*[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?\s*$
+60=constant:\s*(?:[Tt]rue|TRUE|[Ff]alse|FALSE|[Yy]es|YES|[Nn]o|NO|[Oo]n|ON|[Oo]ff|OFF)\s*$
+; trailing comment after a section header ("[Section] ; note")
+70=comment:\s+[;#].*
+; mixed values: quoted parts are strings
+80=string:"[^"]*"|'[^']*'
+90=value:[^"']+|["']
+
+[Rules.section]
+default=section
+; an unterminated "[name" ends at the end of the line, like in the native lexer
+eol_pop=true
+10=section_bracket:\]
+10.pop=true
+20=section:[^\]]+

@@ -35,6 +35,7 @@ enum class TokenClass : uint8_t {
     Regex,
     Template,
     Error,
+    SectionBracket,  // [ and ] around INI section names
     Count
 };
 

@@ -1,0 +1,41 @@
+name: Release
+
+# Push a tag like v1.2.3 (or v1.2.3-beta1 for a pre-release) to build, test and
+# publish tcl-syntaxhl-<version>-x64.zip as a GitHub release.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Version from tag
+        id: ver
+        shell: pwsh
+        run: |
+          $label = "${{ github.ref_name }}".TrimStart('v')
+          $num = ($label -split '-')[0]
+          if ($num -notmatch '^\d+\.\d+\.\d+$') { throw "Tag must look like v1.2.3 or v1.2.3-label (got ${{ github.ref_name }})" }
+          "label=$label" >> $env:GITHUB_OUTPUT
+          "num=$num" >> $env:GITHUB_OUTPUT
+          if ($label -ne $num) { "prerelease=--prerelease" >> $env:GITHUB_OUTPUT } else { "prerelease=" >> $env:GITHUB_OUTPUT }
+      - name: Configure
+        run: cmake -S . -B build -A x64 -DTCL_VERSION=${{ steps.ver.outputs.num }} -DTCL_VERSION_LABEL=${{ steps.ver.outputs.label }}
+      - name: Build
+        run: cmake --build build --config Release --parallel
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Package
+        run: cmake --build build --config Release --target package_zip
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $zip = "build/tcl-syntaxhl-${{ steps.ver.outputs.label }}-x64.zip"
+          gh release create "${{ github.ref_name }}" $zip --title "tcl-syntaxhl ${{ steps.ver.outputs.label }}" --generate-notes ${{ steps.ver.outputs.prerelease }}

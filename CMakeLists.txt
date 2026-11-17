@@ -1,5 +1,12 @@
 cmake_minimum_required(VERSION 3.20)
-project(tcl_syntaxhl VERSION 0.1.0 LANGUAGES CXX)
+# Release builds pass the version from the git tag (see .github/workflows/release.yml):
+#   -DTCL_VERSION=1.2.3 [-DTCL_VERSION_LABEL=1.2.3-beta1]
+set(TCL_VERSION "0.1.0" CACHE STRING "Numeric version (MAJOR.MINOR.PATCH)")
+set(TCL_VERSION_LABEL "" CACHE STRING "Full version label, e.g. 1.2.3-beta1 (defaults to TCL_VERSION)")
+project(tcl_syntaxhl VERSION ${TCL_VERSION} LANGUAGES CXX)
+if(NOT TCL_VERSION_LABEL)
+  set(TCL_VERSION_LABEL ${PROJECT_VERSION})
+endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -59,6 +66,8 @@ if(TCL_BUILD_PLUGIN)
     src/plugin/tcl-syntaxhl.def
   )
   target_link_libraries(tcl-syntaxhl PRIVATE shl_core user32 gdi32 comctl32 uxtheme)
+  configure_file(src/ui/version.h.in ${CMAKE_BINARY_DIR}/generated/version.h @ONLY)
+  target_include_directories(tcl-syntaxhl PRIVATE ${CMAKE_BINARY_DIR}/generated)
   target_compile_definitions(tcl-syntaxhl PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0A00)
   set_target_properties(tcl-syntaxhl PROPERTIES PREFIX "" SUFFIX ".wlx64")
   if(MINGW)
@@ -70,7 +79,7 @@ if(TCL_BUILD_PLUGIN)
 
   # Release layout: build/package/tcl-syntaxhl/* and build/tcl-syntaxhl-<ver>.zip
   set(_pkg_dir ${CMAKE_BINARY_DIR}/package/tcl-syntaxhl)
-  set(_zip ${CMAKE_BINARY_DIR}/tcl-syntaxhl-${PROJECT_VERSION}-x64.zip)
+  set(_zip ${CMAKE_BINARY_DIR}/tcl-syntaxhl-${TCL_VERSION_LABEL}-x64.zip)
   add_custom_target(package_zip
     COMMAND ${CMAKE_COMMAND} -E rm -rf ${CMAKE_BINARY_DIR}/package
     COMMAND ${CMAKE_COMMAND} -E make_directory ${_pkg_dir}
