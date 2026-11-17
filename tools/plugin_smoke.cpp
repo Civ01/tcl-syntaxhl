@@ -272,9 +272,9 @@ int wmain(int argc, wchar_t** argv) {
         std::printf("  %s\n", buf);
         for (const char* ext : {"JSON", "CSS", "PY", "PYW", "JS", "MJS", "CJS", "INI", "CFG", "INF"})
             check(s.find(std::string("EXT=\"") + ext + "\"") != std::string::npos, std::string("detect has ") + ext);
-        char small[16] = {};
-        api.detect(small, sizeof small);
-        check(std::strlen(small) < sizeof small, "detect string respects maxlen");
+        char tiny[16] = {};
+        api.detect(tiny, sizeof tiny);
+        check(std::strlen(tiny) < sizeof tiny, "detect string respects maxlen");
     }
 
     section("samples (light)");
