@@ -21,6 +21,10 @@ bool parseBool(std::string_view s, bool def);
 // "5M", "512K", "1048576", "2G" (binary multiples). Returns def on error.
 uint64_t parseSize(std::string_view s, uint64_t def);
 std::string formatSize(uint64_t bytes);  // "12.4 MB"
+std::string formatSizeSpec(uint64_t bytes);  // INI form: "2M", "512K", "1000"
+// Language names become file names (themes, rules): [A-Za-z0-9_+-], not empty,
+// not "General"/"Languages".
+bool isValidLanguageName(std::string_view name);
 
 // Per-language options from the [<LanguageName>] section (keys lowercased).
 struct LanguageOptions {
@@ -40,6 +44,11 @@ struct LanguageDef {
     std::optional<TokenizerKind> tokenizer;  // per-language override
 };
 
+// Builds a language from its [Languages] entry ("Python", "py,pyw").
+LanguageDef makeLanguage(std::string name, std::string_view extensions);
+// Re-derives lexerId / tokenizer from lang.options (after the options changed).
+void refreshLanguage(LanguageDef& lang);
+
 struct Config {
     TokenizerKind tokenizer = TokenizerKind::Native;
     uint64_t maxHighlightSize = 2ull * 1024 * 1024;
@@ -52,14 +61,11 @@ struct Config {
     int tabWidth = 4;            // columns per tab stop (display only)
     bool allowBeeps = false;     // RichEdit beeps (e.g. PgDn at the end of the file)
     bool debugLog = false;       // write tcl-syntaxhl.log (troubleshooting)
-    bool enableConfigDialog = false;
     bool italicComments = true;  // false: never draw comments in italic
     std::vector<LanguageDef> languages;
 
     static Config defaults();
     static Config fromIni(const IniDocument& ini);
-    // Writes the [General] values back (used by the future config window).
-    void writeGeneral(IniDocument& ini) const;
 
     const LanguageDef* languageForExtension(std::string_view ext) const;
     const LanguageDef* languageForFile(const std::filesystem::path& file) const;

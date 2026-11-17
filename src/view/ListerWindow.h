@@ -79,6 +79,7 @@ private:
     std::vector<Token> pending_;       // lazy tokens not applied yet (sorted)
     int lastPercent_ = -1;
     LONG lastTopCp_ = -1, lastBottomCp_ = -1;
+    bool settingsOpen_ = false;
 };
 
 }  // namespace shl::view

@@ -42,6 +42,14 @@ uint64_t parseSize(std::string_view s, uint64_t def) {
     return def;
 }
 
+std::string formatSizeSpec(uint64_t b) {
+    const uint64_t K = 1024, M = K * 1024, G = M * 1024;
+    if (b && b % G == 0) return std::to_string(b / G) + "G";
+    if (b && b % M == 0) return std::to_string(b / M) + "M";
+    if (b && b % K == 0) return std::to_string(b / K) + "K";
+    return std::to_string(b);
+}
+
 std::string formatSize(uint64_t b) {
     char buf[64];
     if (b < 1024) std::snprintf(buf, sizeof buf, "%llu bytes", static_cast<unsigned long long>(b));
@@ -65,7 +73,7 @@ bool LanguageOptions::getBool(std::string_view key, bool def) const {
     return it == values.end() ? def : parseBool(it->second, def);
 }
 
-static LanguageDef makeLang(std::string name, std::string_view exts) {
+LanguageDef makeLanguage(std::string name, std::string_view exts) {
     LanguageDef d;
     d.id = toLowerAscii(name);
     d.name = std::move(name);
@@ -78,13 +86,21 @@ static LanguageDef makeLang(std::string name, std::string_view exts) {
     return d;
 }
 
+void refreshLanguage(LanguageDef& lang) {
+    auto lex = toLowerAscii(trim(lang.options.get("lexer")));
+    lang.lexerId = lex.empty() ? lang.id : lex;
+    TokenizerKind tk;
+    if (parseTokenizer(lang.options.get("tokenizer"), tk)) lang.tokenizer = tk;
+    else lang.tokenizer.reset();
+}
+
 Config Config::defaults() {
     Config c;
-    c.languages.push_back(makeLang("JSON", "json"));
-    c.languages.push_back(makeLang("CSS", "css"));
-    c.languages.push_back(makeLang("Python", "py,pyw"));
-    c.languages.push_back(makeLang("JS", "js,mjs,cjs"));
-    c.languages.push_back(makeLang("INI", "ini,cfg,inf"));
+    c.languages.push_back(makeLanguage("JSON", "json"));
+    c.languages.push_back(makeLanguage("CSS", "css"));
+    c.languages.push_back(makeLanguage("Python", "py,pyw"));
+    c.languages.push_back(makeLanguage("JS", "js,mjs,cjs"));
+    c.languages.push_back(makeLanguage("INI", "ini,cfg,inf"));
     return c;
 }
 
@@ -102,7 +118,6 @@ Config Config::fromIni(const IniDocument& ini) {
         int n = std::atoi(v->c_str());
         if (n >= 4 && n <= 96) c.fontSize = n;
     }
-    if (auto v = ini.get(G, "enable_config_dialog")) c.enableConfigDialog = parseBool(*v, false);
     if (auto v = ini.get(G, "italic_comments")) c.italicComments = parseBool(*v, true);
     if (auto v = ini.get(G, "allow_beeps")) c.allowBeeps = parseBool(*v, false);
     if (auto v = ini.get(G, "debug_log")) c.debugLog = parseBool(*v, false);
@@ -115,33 +130,14 @@ Config Config::fromIni(const IniDocument& ini) {
         c.languages.clear();
         for (auto& [name, exts] : ini.entries("Languages")) {
             if (name.empty()) continue;
-            c.languages.push_back(makeLang(name, exts));
+            c.languages.push_back(makeLanguage(name, exts));
         }
     }
     for (auto& lang : c.languages) {
         for (auto& [k, v] : ini.entries(lang.name)) lang.options.values[toLowerAscii(k)] = v;
-        auto lex = toLowerAscii(trim(lang.options.get("lexer")));
-        if (!lex.empty()) lang.lexerId = lex;
-        TokenizerKind tk;
-        if (parseTokenizer(lang.options.get("tokenizer"), tk)) lang.tokenizer = tk;
+        refreshLanguage(lang);
     }
     return c;
-}
-
-void Config::writeGeneral(IniDocument& ini) const {
-    const char* G = "General";
-    ini.set(G, "tokenizer", tokenizerName(tokenizer));
-    ini.set(G, "max_highlight_size", std::to_string(maxHighlightSize));
-    ini.set(G, "use_lazy_highlight", useLazyHighlight ? "true" : "false");
-    ini.set(G, "theme", theme);
-    ini.set(G, "theme_light", themeLight);
-    ini.set(G, "theme_dark", themeDark);
-    ini.set(G, "font_face", fontFace);
-    ini.set(G, "font_size", std::to_string(fontSize));
-    ini.set(G, "enable_config_dialog", enableConfigDialog ? "true" : "false");
-    ini.set(G, "italic_comments", italicComments ? "true" : "false");
-    ini.set(G, "tab_width", std::to_string(tabWidth));
-    ini.set(G, "allow_beeps", allowBeeps ? "true" : "false");
 }
 
 const LanguageDef* Config::languageForExtension(std::string_view ext) const {
@@ -161,6 +157,15 @@ const LanguageDef* Config::languageForFile(const std::filesystem::path& file) co
 
 TokenizerKind Config::tokenizerFor(const LanguageDef& lang) const {
     return lang.tokenizer ? *lang.tokenizer : tokenizer;
+}
+
+bool isValidLanguageName(std::string_view n) {
+    if (n.empty() || n.size() > 64) return false;
+    for (char c : n)
+        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '+' ||
+              c == '-'))
+            return false;
+    return !iequals(n, "General") && !iequals(n, "Languages");
 }
 
 bool Config::italicCommentsFor(const LanguageDef& lang) const {

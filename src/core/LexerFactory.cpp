@@ -21,6 +21,12 @@ const NativeEntry kNative[] = {
 };
 }  // namespace
 
+std::vector<std::string> nativeLexerIds() {
+    std::vector<std::string> out;
+    for (const auto& e : kNative) out.emplace_back(e.id);
+    return out;
+}
+
 bool hasNativeLexer(std::string_view id) {
     for (const auto& e : kNative)
         if (id == e.id) return true;

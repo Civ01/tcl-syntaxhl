@@ -10,6 +10,7 @@
 namespace shl {
 
 bool hasNativeLexer(std::string_view lexerId);
+std::vector<std::string> nativeLexerIds();  // registration order
 LexerPtr createNativeLexer(std::string_view lexerId, const LanguageOptions& opts);
 
 std::filesystem::path rulesPathFor(const std::filesystem::path& pluginDir, const LanguageDef& lang);

@@ -39,6 +39,8 @@ add_library(shl_core STATIC
   src/core/Theme.cpp
   src/core/LazyModel.cpp
   src/core/LexerFactory.cpp
+  src/core/OptionSchema.cpp
+  src/core/Settings.cpp
   src/lexers/JsonLexer.cpp
   src/lexers/CssLexer.cpp
   src/lexers/PythonLexer.cpp
@@ -63,10 +65,11 @@ if(TCL_BUILD_PLUGIN)
     src/view/Highlighter.cpp
     src/ui/GotoLineDialog.cpp
     src/ui/ConfigDialog.cpp
+    src/ui/ConfigPages.cpp
     src/ui/resources.rc
     src/plugin/tcl-syntaxhl.def
   )
-  target_link_libraries(tcl-syntaxhl PRIVATE shl_core user32 gdi32 comctl32 uxtheme psapi version)
+  target_link_libraries(tcl-syntaxhl PRIVATE shl_core user32 gdi32 comctl32 uxtheme psapi version shell32)
   configure_file(src/ui/version.h.in ${CMAKE_BINARY_DIR}/generated/version.h @ONLY)
   target_include_directories(tcl-syntaxhl PRIVATE ${CMAKE_BINARY_DIR}/generated)
   target_compile_definitions(tcl-syntaxhl PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0A00)
@@ -105,6 +108,7 @@ if(TCL_BUILD_TESTS)
     tests/test_ini.cpp
     tests/test_regex.cpp
     tests/test_lazy.cpp
+    tests/test_settings.cpp
   )
   target_include_directories(shl_tests PRIVATE tests tests/third_party)
   target_link_libraries(shl_tests PRIVATE shl_core)

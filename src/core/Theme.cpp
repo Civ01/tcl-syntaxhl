@@ -1,5 +1,7 @@
 #include "Theme.h"
 
+#include <algorithm>
+
 #include "TextUtil.h"
 
 namespace shl {
@@ -189,6 +191,19 @@ void Theme::finalize() {
     }
     for (size_t c = 0; c < kTokenClassCount; ++c)
         if (done[c]) styles[c] = resolved[c];
+}
+
+std::vector<std::string> listThemeSets(const std::filesystem::path& pluginDir) {
+    std::vector<std::string> out;
+    std::error_code ec;
+    for (auto it = std::filesystem::directory_iterator(pluginDir / "themes", ec);
+         !ec && it != std::filesystem::directory_iterator(); it.increment(ec)) {
+        if (it->is_directory(ec)) out.push_back(pathToUtf8(it->path().filename()));
+    }
+    std::sort(out.begin(), out.end(), [](const std::string& a, const std::string& b) {
+        return toLowerAscii(a) < toLowerAscii(b);
+    });
+    return out;
 }
 
 Theme loadTheme(const std::filesystem::path& pluginDir, const std::string& set, const std::string& languageId,

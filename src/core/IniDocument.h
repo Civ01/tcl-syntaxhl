@@ -36,6 +36,12 @@ public:
     // (creating the section at the end of the document if needed).
     void set(std::string_view section, std::string_view key, std::string_view value);
 
+    // Removes every occurrence of key in section. Returns true if any.
+    bool remove(std::string_view section, std::string_view key);
+    // Removes the section header and all of its lines (comments directly
+    // belonging to it included) up to the next section header.
+    bool removeSection(std::string_view section);
+
     std::string serialize() const;  // CRLF line endings
     bool saveFile(const std::filesystem::path& p) const;
 

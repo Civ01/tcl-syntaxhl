@@ -1,5 +1,6 @@
 #include "IniDocument.h"
 
+#include <algorithm>
 #include <fstream>
 
 #include "TextUtil.h"
@@ -136,6 +137,33 @@ void IniDocument::set(std::string_view section, std::string_view key, std::strin
     } else {
         lines_.insert(lines_.begin() + insertAt, kv);
     }
+}
+
+bool IniDocument::remove(std::string_view section, std::string_view key) {
+    size_t before = lines_.size();
+    lines_.erase(std::remove_if(lines_.begin(), lines_.end(),
+                                [&](const Line& l) {
+                                    return l.type == LineType::KeyValue && iequals(l.section, section) &&
+                                           iequals(l.key, key);
+                                }),
+                 lines_.end());
+    return lines_.size() != before;
+}
+
+bool IniDocument::removeSection(std::string_view section) {
+    size_t before = lines_.size();
+    std::vector<Line> out;
+    out.reserve(lines_.size());
+    bool inside = false;
+    for (auto& l : lines_) {
+        if (l.type == LineType::Section) inside = iequals(l.section, section);
+        if (!inside) out.push_back(std::move(l));
+    }
+    // Drop a blank line left directly before where the section was at the end.
+    while (out.size() > 1 && out.back().type == LineType::Blank && out[out.size() - 2].type == LineType::Blank)
+        out.pop_back();
+    lines_ = std::move(out);
+    return lines_.size() != before;
 }
 
 std::string IniDocument::serialize() const {

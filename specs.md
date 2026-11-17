@@ -164,17 +164,51 @@ struct LexerFactory {
 - **Lexer reuse:** a language section may set `lexer=<id>` to reuse a native lexer under another name (e.g. `[JSONC] lexer=json`). A language with a rules file but no native lexer is handled by the regex backend.
 - If `regex` is selected but `rules/<lang>.rules` is missing or invalid, the plugin falls back to `native` and shows an info-bar notice.
 
-### 4.3 Config window backbone (not user-reachable in v1)
+### 4.3 Settings window (runtime configuration)
 
-- `core/Settings`: a typed settings model with `load(path)` and `save(path)`. It round-trips the INI and preserves comments and unknown keys where practical.
-- `ui/ConfigDialog`: a dialog class skeleton with resource template placeholders, tab or page structure for General, Languages and Theme, and a `Settings&` binding. It has no functional controls yet.
-- Entry point: a hidden INI flag `enable_config_dialog=false`. When true, a context-menu item "Settings…" opens the stub. This lets the dialog be finished later without architectural changes.
+**Entry point.**
+- Right-click in the view, then *Settings…*. The item is always present; the old `enable_config_dialog` flag is gone.
+- The menu posts `WM_COMMAND(IDM_SETTINGS)` to the plugin window. Tests can open the window the same way.
+- The window is modal and owned by the Lister window. Only one window can be open per Lister.
+
+**Layers** (portable core / Windows UI):
+
+| Layer | Responsibility |
+|---|---|
+| `core/OptionSchema` | Declarative list of every option: key, type (bool, int range, size, enum, theme set, font), default, label, help text. It covers `[General]` options, per-language overrides (`tokenizer`, `italic_comments`, `tab_width`, `lexer`) and lexer-specific options (`[JSON] support_jsonc_comments`, `[CSS] support_scss_less`). A new lexer option is one schema entry; the UI picks it up automatically. |
+| `core/Settings` | Working model: the parsed `IniDocument` plus a `Config`. `save()` writes **only values that changed**, comparing parsed values so that `2M` and `2097152` count as equal. It keeps comments, ordering and unknown keys, appends new languages to `[Languages]`, and deletes a removed language's line and section. |
+| `core/IniDocument` | Gains `remove(section, key)` and `removeSection(section)`. |
+| `core/Theme` | Gains `listThemeSets(pluginDir)`, the folder names under `themes/`. |
+| `ui/ConfigDialog` | Tab control hosting one child dialog per page. *OK*, *Cancel*, *Apply* and *Open INI file*. OK and Apply call `validate()` on every page; the first error selects its page, focuses the control and shows a message. Then each page runs `store()`, `Settings::save()` runs, and `onApplied` fires. |
+| `ui/ConfigPage` | Interface: `title()`, `create(parentTab)`, `load(const Config&)`, `validate(std::wstring& err) -> HWND`, `store(Config&)`. |
+| `view/ListerWindow` | Opens the window. `onApplied` reloads the current file with the new settings, keeping the scroll position. Other open Lister windows pick the changes up on their next file load, because the INI is read on every load. |
+
+**Pages.**
+1. **General:** all `[General]` options.
+   - Tokenizer, size limit (text such as `2M`), lazy highlighting.
+   - Theme (`auto` or a set), light set, dark set (dropdowns filled from `themes/`).
+   - Font face (editable dropdown of the installed fixed-pitch fonts), font size, tab width (spin controls).
+   - Italic comments, allow beeps, debug log.
+2. **Languages:**
+   - A list of languages with *Add…* and *Remove*.
+   - For the selected language: extensions; the lexer (native lexer id, or a rules file only); and the tokenizer, italic-comments and tab-width overrides ("(default)" means inherit from General).
+   - Checkboxes for that lexer's options, generated from the schema.
+   - A read-only **detect string** with a *Copy* button, plus a note that TC caches it: after changing extensions, paste it in *Options → Plugins → Lister → Configure*.
+3. **Theme:** phase 2 is an editor for token colors and styles per set and language, writing `<set>/<lang>.theme` or `default.theme` with the same minimal-diff saving. Until then, the page has an *Open themes folder* button.
+
+**Validation rules:**
+- Size must parse.
+- Numbers must be in range.
+- Extensions must be non-empty.
+- A language name must be unique, contain only `[A-Za-z0-9_+-]` (it becomes a theme or rules file name), and must not be `General` or `Languages`.
+
+**Not in scope yet:** dark-mode painting of the settings window, and the theme editor (phase 2).
 
 ---
 
 ## 5. Configuration: `tcl-syntaxhl.ini`
 
-The file lives next to the DLL. Keys use `snake_case`. A missing file, section or key falls back to the built-in defaults shown below. In v1 the plugin only reads this file.
+The file lives next to the DLL. Keys use `snake_case`. A missing file, section or key falls back to the built-in defaults shown below. The plugin reads it on every file load; the settings window (§4.3) writes it, changing only the edited values.
 
 ```ini
 [General]
@@ -197,8 +231,6 @@ tab_width=4
 allow_beeps=false
 ; false = never draw comments in italic; per-language override: [INI] italic_comments=...
 italic_comments=true
-; reserved for the future config window
-enable_config_dialog=false
 
 [Languages]
 ; LanguageName=ext1,ext2   (no dots; case-insensitive)
@@ -452,6 +484,7 @@ tests/
 6. **Large files:** size limit, info bar, lazy mode with checkpoints.
 7. **Regex backend:** `.rules` parser, RegexLexer, `json.rules`, backend switching and fallback.
 8. **Backbone and packaging:** Settings round-trip, ConfigDialog stub, release zip, README.
+9. **Settings window:** General and Languages pages (phase 1), then the theme editor (phase 2), per §4.3.
 
 ---
 

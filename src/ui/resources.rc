@@ -15,18 +15,105 @@ BEGIN
     PUSHBUTTON      "Cancel", IDCANCEL, 143, 41, 50, 14
 END
 
-// Settings window skeleton (not reachable unless enable_config_dialog=true).
-IDD_CONFIG DIALOGEX 0, 0, 320, 200
+// ---------------------------------------------------------------- settings window
+IDD_CONFIG DIALOGEX 0, 0, 340, 268
 STYLE DS_SHELLFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "tcl-syntaxhl settings"
 FONT 9, "MS Shell Dlg 2", 400, 0, 1
 BEGIN
-    CONTROL         "", IDC_CONFIG_TABS, "SysTabControl32", WS_TABSTOP, 7, 7, 306, 160
-    LTEXT           "Settings UI is not implemented yet. Edit the INI file directly:",
-                    IDC_CONFIG_PLACEHOLDER, 17, 30, 286, 9
-    EDITTEXT        IDC_CONFIG_PATH, 17, 44, 286, 13, ES_AUTOHSCROLL | ES_READONLY
-    DEFPUSHBUTTON   "OK", IDOK, 209, 179, 50, 14
-    PUSHBUTTON      "Cancel", IDCANCEL, 263, 179, 50, 14
+    CONTROL         "", IDC_CONFIG_TABS, "SysTabControl32", WS_TABSTOP, 7, 7, 326, 232
+    PUSHBUTTON      "Open INI file", IDC_CONFIG_OPENINI, 7, 247, 62, 14
+    DEFPUSHBUTTON   "OK", IDOK, 175, 247, 50, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 229, 247, 50, 14
+    PUSHBUTTON      "&Apply", IDC_CONFIG_APPLY, 283, 247, 50, 14
+END
+
+IDD_PAGE_GENERAL DIALOGEX 0, 0, 316, 212
+STYLE DS_SHELLFONT | DS_CONTROL | WS_CHILD
+FONT 9, "MS Shell Dlg 2", 400, 0, 1
+BEGIN
+    GROUPBOX        "Highlighting", -1, 4, 2, 308, 58
+    LTEXT           "&Tokenizer:", -1, 12, 16, 86, 9
+    COMBOBOX        IDC_GEN_TOKENIZER, 100, 14, 90, 60, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Highlight files &up to:", -1, 12, 32, 86, 9
+    EDITTEXT        IDC_GEN_MAXSIZE, 100, 30, 50, 12, ES_AUTOHSCROLL
+    LTEXT           "(bytes, or K / M / G)", -1, 156, 32, 120, 9
+    AUTOCHECKBOX    "Highlight larger files while scrolling (&lazy) instead of showing plain text",
+                    IDC_GEN_LAZY, 12, 45, 296, 10
+
+    GROUPBOX        "Appearance", -1, 4, 64, 308, 92
+    LTEXT           "T&heme:", -1, 12, 78, 86, 9
+    COMBOBOX        IDC_GEN_THEME, 100, 76, 90, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Light / dark (auto):", -1, 12, 94, 86, 9
+    COMBOBOX        IDC_GEN_THEME_LIGHT, 100, 92, 90, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    COMBOBOX        IDC_GEN_THEME_DARK, 196, 92, 90, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "&Font:", -1, 12, 110, 86, 9
+    COMBOBOX        IDC_GEN_FONT, 100, 108, 130, 120, CBS_DROPDOWN | CBS_SORT | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Si&ze:", -1, 236, 110, 22, 9
+    EDITTEXT        IDC_GEN_FONTSIZE, 260, 108, 30, 12, ES_NUMBER
+    CONTROL         "", IDC_GEN_FONTSIZE_SPIN, "msctls_updown32",
+                    UDS_SETBUDDYINT | UDS_ALIGNRIGHT | UDS_AUTOBUDDY | UDS_ARROWKEYS | UDS_NOTHOUSANDS, 0, 0, 10, 12
+    LTEXT           "Ta&b width:", -1, 12, 126, 86, 9
+    EDITTEXT        IDC_GEN_TABWIDTH, 100, 124, 30, 12, ES_NUMBER
+    CONTROL         "", IDC_GEN_TABWIDTH_SPIN, "msctls_updown32",
+                    UDS_SETBUDDYINT | UDS_ALIGNRIGHT | UDS_AUTOBUDDY | UDS_ARROWKEYS | UDS_NOTHOUSANDS, 0, 0, 10, 12
+    LTEXT           "columns (display only)", -1, 142, 126, 120, 9
+    AUTOCHECKBOX    "&Italic comments (when the theme uses italic)", IDC_GEN_ITALIC, 12, 141, 296, 10
+
+    GROUPBOX        "Behavior", -1, 4, 160, 308, 46
+    AUTOCHECKBOX    "Allow b&eeps (navigation at the start/end of the file)", IDC_GEN_BEEPS, 12, 173, 296, 10
+    AUTOCHECKBOX    "Write &debug log (tcl-syntaxhl.log, troubleshooting only)", IDC_GEN_DEBUGLOG, 12, 188, 296, 10
+END
+
+IDD_PAGE_LANGUAGES DIALOGEX 0, 0, 316, 212
+STYLE DS_SHELLFONT | DS_CONTROL | WS_CHILD
+FONT 9, "MS Shell Dlg 2", 400, 0, 1
+BEGIN
+    LISTBOX         IDC_LANG_LIST, 4, 4, 76, 142, LBS_NOTIFY | WS_VSCROLL | WS_BORDER | WS_TABSTOP
+    PUSHBUTTON      "A&dd...", IDC_LANG_ADD, 4, 148, 37, 14
+    PUSHBUTTON      "Re&move", IDC_LANG_REMOVE, 43, 148, 37, 14
+
+    GROUPBOX        "", IDC_LANG_TITLE, 86, 2, 226, 144
+    LTEXT           "&Extensions:", -1, 94, 16, 66, 9
+    EDITTEXT        IDC_LANG_EXTS, 162, 14, 142, 12, ES_AUTOHSCROLL
+    LTEXT           "Le&xer:", -1, 94, 32, 66, 9
+    COMBOBOX        IDC_LANG_LEXER, 162, 30, 90, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "&Tokenizer:", -1, 94, 48, 66, 9
+    COMBOBOX        IDC_LANG_TOKENIZER, 162, 46, 90, 60, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "&Italic comments:", -1, 94, 64, 66, 9
+    COMBOBOX        IDC_LANG_ITALIC, 162, 62, 90, 60, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Tab &width:", -1, 94, 80, 66, 9
+    EDITTEXT        IDC_LANG_TABWIDTH, 162, 78, 30, 12, ES_NUMBER
+    LTEXT           "(empty = General setting)", -1, 198, 80, 110, 9
+    GROUPBOX        "Lexer options", IDC_LANG_OPTIONS_GROUP, 94, 94, 210, 46
+
+    LTEXT           "Detect string - TC caches it. After changing extensions, paste it into\nConfiguration > Options > Plugins > Lister plugins > Configure.",
+                    -1, 4, 166, 308, 18
+    EDITTEXT        IDC_LANG_DETECT, 4, 186, 256, 12, ES_AUTOHSCROLL | ES_READONLY
+    PUSHBUTTON      "&Copy", IDC_LANG_COPY_DETECT, 264, 185, 48, 14
+END
+
+IDD_PAGE_THEME DIALOGEX 0, 0, 316, 212
+STYLE DS_SHELLFONT | DS_CONTROL | WS_CHILD
+FONT 9, "MS Shell Dlg 2", 400, 0, 1
+BEGIN
+    LTEXT           "", IDC_THEME_INFO, 4, 4, 308, 60
+    PUSHBUTTON      "Open &themes folder", IDC_THEME_OPEN_FOLDER, 4, 68, 90, 14
+END
+
+IDD_ADD_LANGUAGE DIALOGEX 0, 0, 220, 84
+STYLE DS_SHELLFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Add language"
+FONT 9, "MS Shell Dlg 2", 400, 0, 1
+BEGIN
+    LTEXT           "&Name:", -1, 7, 9, 50, 9
+    EDITTEXT        IDC_ADD_NAME, 60, 7, 153, 12, ES_AUTOHSCROLL
+    LTEXT           "&Lexer:", -1, 7, 25, 50, 9
+    COMBOBOX        IDC_ADD_LEXER, 60, 23, 90, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "&Extensions:", -1, 7, 41, 50, 9
+    EDITTEXT        IDC_ADD_EXTS, 60, 39, 153, 12, ES_AUTOHSCROLL
+    DEFPUSHBUTTON   "OK", IDOK, 109, 63, 50, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 163, 63, 50, 14
 END
 
 VS_VERSION_INFO VERSIONINFO

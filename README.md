@@ -29,7 +29,7 @@ Requirements: Windows 10 or later, Total Commander x64. Dark-mode following need
 | Ctrl+G | Go to line (`123` or `123:45` for line:column) |
 | Ctrl+Mouse wheel | Zoom (per window, not saved) |
 | Lister "Wrap text" option | Word wrap on/off |
-| Right click | Context menu (Copy, Select all, Go to line) |
+| Right click | Context menu (Copy, Select all, Go to line, Settings…) |
 
 Other keys (Esc, N/P, 1–7, …) are passed on to Lister. Find-first starts at the
 first displayed line, as the TC plugin documentation specifies.
@@ -38,6 +38,16 @@ If you choose *Image/Multimedia* from Lister's menu (`lcp_forceshow`), files wit
 extensions the plugin doesn't know are shown as plain text instead of being refused.
 
 ## Configuration: `tcl-syntaxhl.ini`
+
+Right-click in the viewer and choose **Settings…** to change options in a window:
+
+- **General** has all `[General]` options.
+- **Languages** lets you add or remove languages and edit their extensions, lexer,
+  overrides and lexer options. It also shows the detect string to copy into TC.
+- **Theme** opens the themes folder; a color editor will come later.
+
+*OK* or *Apply* saves and reloads the current file. Only the values you changed
+are rewritten, so comments and unknown keys stay. You can also edit the INI by hand.
 
 The INI file is fully commented. The important settings are:
 

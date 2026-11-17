@@ -26,6 +26,7 @@
 #include "core/TextUtil.h"
 #include "core/Theme.h"
 #include "plugin/listplug.h"
+#include "ui/resource.h"
 
 namespace fs = std::filesystem;
 using namespace shl;
@@ -86,6 +87,49 @@ WNDPROC g_pluginOrigProc = nullptr;
 LRESULT CALLBACK listerSubclass(HWND h, UINT m, WPARAM w, LPARAM l) {
     if (m == WM_KEYDOWN || m == WM_CHAR) g_pluginKeys.emplace_back(m, w);
     return CallWindowProcW(g_pluginOrigProc, h, m, w, l);
+}
+
+// ---- settings window automation
+HWND findSettingsDialog() {
+    HWND found = nullptr;
+    EnumThreadWindows(
+        GetCurrentThreadId(),
+        [](HWND h, LPARAM p) -> BOOL {
+            wchar_t cls[32] = {}, title[128] = {};
+            GetClassNameW(h, cls, 32);
+            GetWindowTextW(h, title, 128);
+            if (wcscmp(cls, L"#32770") == 0 && wcsncmp(title, L"tcl-syntaxhl settings", 21) == 0) {
+                *reinterpret_cast<HWND*>(p) = h;
+                return FALSE;
+            }
+            return TRUE;
+        },
+        reinterpret_cast<LPARAM>(&found));
+    return found;
+}
+
+HWND findDescendant(HWND root, int id) {
+    struct S { int id; HWND hit; } st{id, nullptr};
+    EnumChildWindows(
+        root,
+        [](HWND h, LPARAM p) -> BOOL {
+            auto* s = reinterpret_cast<S*>(p);
+            if (GetDlgCtrlID(h) == s->id) { s->hit = h; return FALSE; }
+            return TRUE;
+        },
+        reinterpret_cast<LPARAM>(&st));
+    return st.hit;
+}
+
+std::function<void(HWND)> g_dialogScript;
+bool g_dialogSeen = false;
+
+void CALLBACK dialogTimer(HWND, UINT, UINT_PTR id, DWORD) {
+    HWND dlg = findSettingsDialog();
+    if (!dlg) return;
+    KillTimer(nullptr, id);
+    g_dialogSeen = true;
+    if (g_dialogScript) g_dialogScript(dlg);
 }
 
 LRESULT CALLBACK hostProc(HWND h, UINT m, WPARAM w, LPARAM l) {
@@ -712,6 +756,61 @@ int wmain(int argc, wchar_t** argv) {
             check(compareColors(findChild(h, MSFTEDIT_CLASS), e) == 0, ".pac colors (JS)");
             close(h);
         }
+    }
+
+    section("settings window");
+    {
+        IniOverride ov([](IniDocument&) {});  // restore the INI afterwards
+        auto py = g_samples / "sample.py";
+        auto e = expectedFor(py, false);
+        LONG commentPos = -1;
+        for (const auto& t : e.tokens)
+            if (t.cls == TokenClass::Comment) { commentPos = static_cast<LONG>(t.start); break; }
+        HWND h = open(py);
+        check(h != nullptr, "open sample.py");
+        std::string log;
+        g_dialogSeen = false;
+        g_dialogScript = [&](HWND dlg) {
+            auto set = [&](int id, const wchar_t* text) { SetWindowTextW(findDescendant(dlg, id), text); };
+            auto setCheck = [&](int id, bool on) {
+                SendMessageW(findDescendant(dlg, id), BM_SETCHECK, on ? BST_CHECKED : BST_UNCHECKED, 0);
+            };
+            set(IDC_GEN_TABWIDTH, L"8");
+            set(IDC_GEN_MAXSIZE, L"3M");
+            setCheck(IDC_GEN_ITALIC, false);
+            // Languages page: select JSON, add an extension, enable JSONC.
+            HWND list = findDescendant(dlg, IDC_LANG_LIST);
+            SendMessageW(list, LB_SELECTSTRING, static_cast<WPARAM>(-1), reinterpret_cast<LPARAM>(L"JSON"));
+            SendMessageW(GetParent(list), WM_COMMAND, MAKEWPARAM(IDC_LANG_LIST, LBN_SELCHANGE),
+                         reinterpret_cast<LPARAM>(list));
+            set(IDC_LANG_EXTS, L"json, .JSONC");
+            HWND jsonc = findDescendant(dlg, IDC_LANG_OPTION_FIRST);
+            wchar_t label[128] = {};
+            GetWindowTextW(jsonc, label, 128);
+            log = utf16ToUtf8(std::u16string(label, label + wcslen(label)));
+            setCheck(IDC_LANG_OPTION_FIRST, true);
+            SendMessageW(dlg, WM_COMMAND, IDOK, 0);
+        };
+        SetTimer(nullptr, 0, 100, dialogTimer);
+        PostMessageW(h, WM_COMMAND, IDM_SETTINGS, 0);
+        pump(1500);
+        check(g_dialogSeen, "settings window opened via IDM_SETTINGS");
+        check(!findSettingsDialog(), "settings window closed by OK");
+        check(log.find("JSONC") != std::string::npos, "lexer option checkbox generated for JSON (" + log + ")");
+        std::string ini;
+        readFileBytes(g_pluginDir / "tcl-syntaxhl.ini", ini);
+        check(ini.find("tab_width=8") != std::string::npos, "tab_width saved");
+        check(ini.find("max_highlight_size=3M") != std::string::npos, "size saved as 3M");
+        check(ini.find("italic_comments=false") != std::string::npos, "italic_comments saved");
+        check(ini.find("JSON=json,jsonc") != std::string::npos, "extensions normalised and saved");
+        check(ini.find("support_jsonc_comments=true") != std::string::npos, "lexer option saved");
+        check(ini.find("; Tokenizer backend") != std::string::npos, "comments preserved");
+        check(ini.find("use_lazy_highlight=false") != std::string::npos, "untouched values kept");
+        if (h) {
+            check(!italicAt(findChild(h, MSFTEDIT_CLASS), commentPos), "view reloaded with the new settings");
+            close(h);
+        }
+        g_dialogScript = nullptr;
     }
 
     section("options: jsonc + scss");

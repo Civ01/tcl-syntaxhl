@@ -470,10 +470,8 @@ void ListerWindow::showContextMenu(int x, int y) {
     AppendMenuW(m, MF_STRING, IDM_SELECTALL, L"Select &all\tCtrl+A");
     AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(m, MF_STRING, IDM_GOTO, L"&Go to line...\tCtrl+G");
-    if (cfg_.enableConfigDialog) {
-        AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
-        AppendMenuW(m, MF_STRING, IDM_SETTINGS, L"&Settings...");
-    }
+    AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(m, MF_STRING, IDM_SETTINGS, L"&Settings...");
     if (x == -1 && y == -1) {  // keyboard invoked: use caret position
         POINTL p{};
         SendMessageW(edit_, EM_POSFROMCHAR, reinterpret_cast<WPARAM>(&p), cr.cpMin);
@@ -493,10 +491,20 @@ void ListerWindow::showContextMenu(int x, int y) {
 }
 
 void ListerWindow::openSettings() {
+    if (settingsOpen_) return;
+    settingsOpen_ = true;
     Settings s;
     s.load(win::iniPath(), win::ansiConverter());
-    ui::ConfigDialog dlg(s);
-    if (dlg.show(hwnd_)) load(file_, showFlags_);
+    ui::ConfigDialog dlg(s, ui::ConfigContext{win::pluginDir()});
+    HWND self = hwnd_;
+    dlg.onApplied = [this, self] {
+        if (!IsWindow(self)) return;
+        int pct = lastPercent_;
+        if (load(file_, showFlags_) && pct > 0) setPercent(pct);
+    };
+    dlg.show(hwnd_);
+    settingsOpen_ = false;
+    if (IsWindow(self)) SetFocus(edit_);
 }
 
 LRESULT CALLBACK ListerWindow::containerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
@@ -511,6 +519,12 @@ LRESULT CALLBACK ListerWindow::containerProc(HWND hwnd, UINT msg, WPARAM wp, LPA
             switch (msg) {
                 case WM_SIZE: self->layout(); self->viewChanged(); return 0;
                 case WM_SETFOCUS: SetFocus(self->edit_); return 0;
+                case WM_COMMAND:
+                    if (LOWORD(wp) == IDM_SETTINGS && lp == 0) {  // context menu / tests
+                        self->openSettings();
+                        return 0;
+                    }
+                    break;
                 case WM_ERASEBKGND: return 1;
                 case WM_TIMER:
                     if (wp == kTimerId) {

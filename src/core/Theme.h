@@ -56,6 +56,9 @@ private:
 // (TokenClass::Count = no parent).
 TokenClass parentClass(TokenClass c);
 
+// Folder names under <pluginDir>/themes, sorted case-insensitively.
+std::vector<std::string> listThemeSets(const std::filesystem::path& pluginDir);
+
 // Resolution order: built-in palette (light/dark) -> <set>/default.theme ->
 // <set>/<languageId>.theme. Missing files are silently skipped.
 Theme loadTheme(const std::filesystem::path& pluginDir, const std::string& set, const std::string& languageId,
