@@ -67,7 +67,7 @@ std::vector<Token> LazyModel::takeTokens(size_t first, size_t last) {
         for (const auto& t : tmp)
             if (t.start >= lo && t.start < hi) result.push_back(t);
     }
-    std::fill(done_.begin() + static_cast<ptrdiff_t>(first), done_.begin() + static_cast<ptrdiff_t>(last) + 1, 1);
+    std::fill(done_.begin() + static_cast<ptrdiff_t>(first), done_.begin() + static_cast<ptrdiff_t>(last) + 1, char(1));
     return result;
 }
 
